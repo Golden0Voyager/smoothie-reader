@@ -396,7 +396,7 @@ async def translate_text(req: dict):
 
 @app.post("/api/ai/translate-stream")
 async def translate_text_stream(req: dict):
-    """Translate text using Gemini with streaming output, auto-detect language direction."""
+    """Translate text using Gemini with streaming output, no thinking, max speed."""
     if not model:
         raise HTTPException(status_code=500, detail="AI not configured")
     text = req.get("text", "")
@@ -405,25 +405,36 @@ async def translate_text_stream(req: dict):
 
     # Auto-detect: if mostly CJK → translate to English, otherwise → translate to Chinese
     cjk_count = sum(1 for c in text if '\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af')
-    if cjk_count > len(text) * 0.3:
-        target = "英文"
-    else:
-        target = "中文"
+    target = "英文" if cjk_count > len(text) * 0.3 else "中文"
 
-    prompt = f"""请将以下文本翻译成{target}。
+    # Build context from book metadata
+    context = ""
+    book_id = req.get("book_id")
+    chapter_index = req.get("chapter_index")
+    if book_id:
+        book = load_book_cached(book_id)
+        if book:
+            meta = book.metadata
+            parts = [f"书名《{meta.title}》"]
+            if meta.creator:
+                parts.append(f"作者{meta.creator}")
+            if chapter_index is not None and 0 <= chapter_index < len(book.spine):
+                ch_title = book.spine[chapter_index].title
+                if ch_title:
+                    parts.append(f"当前章节「{ch_title}」")
+            context = f"[{', '.join(parts)}] "
 
-翻译要求：
-- 准确传达原意，语句通顺自然，符合{target}的表达习惯
-- 专有名词（人名、地名、术语）首次出现时附注原文
-- 保留原文的语气和风格（正式/口语/文学/技术）
-- 只返回译文，不要解释
-
-原文：
-{text}"""
+    prompt = f"{context}翻译成{target}，专有名词首次附注原文，只返回译文：\n{text}"
 
     def generate():
         try:
-            response = model.generate_content(prompt, stream=True)
+            response = model.generate_content(
+                prompt,
+                stream=True,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.1,
+                ),
+            )
             for chunk in response:
                 try:
                     if chunk.text:
