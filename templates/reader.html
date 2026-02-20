@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         /* --- 1. Global Performance & Vars --- */
         * { box-sizing: border-box; }
@@ -69,26 +70,26 @@
         .toggle-btn {
             position: fixed; width: 30px; height: 30px;
             background: color-mix(in srgb, var(--surface) 95%, transparent); backdrop-filter: blur(12px);
-            border: 1px solid var(--outline); border-radius: 12px;
+            border: 1.2px solid var(--outline); border-radius: 12px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; z-index: 2000; color: var(--secondary);
             box-shadow: 0 4px 16px rgba(0,0,0,0.06);
             transition: all 0.3s var(--transition), border-color 0.2s;
         }
         .toggle-btn:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
-        .toggle-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+        .toggle-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
         
         /* Top Satellites */
-        #toggle-right { top: 30px; right: calc(var(--panels-width) + 30px); }
-        #panels-container.collapsed ~ #toggle-right { right: 30px; }
+        #toggle-right { top: 24px; right: calc(var(--panels-width) + 24px); }
+        #panels-container.collapsed ~ #toggle-right { right: 24px; }
 
         /* Left button group: menu + sub-buttons */
         .toggle-group {
-            position: fixed; top: 30px; left: calc(var(--sidebar-width) + 30px);
+            position: fixed; top: 24px; left: calc(var(--sidebar-width) + 24px);
             z-index: 2000; display: flex; flex-direction: column; align-items: center; gap: 0;
             transition: left 0.3s var(--transition);
         }
-        #sidebar.collapsed ~ .toggle-group { left: 30px; }
+        #sidebar.collapsed ~ .toggle-group { left: 24px; }
         .toggle-group .toggle-btn { position: static; }
         /* Hamburger → collapse icon swap on hover */
         #toggle-left .icon-collapse { display: none; transition: transform 0.3s ease; }
@@ -99,12 +100,13 @@
         .toggle-group.expanded #toggle-left .icon-collapse { display: block; }
         .toggle-group .toggle-sub {
             opacity: 0; transform: scale(0.6) translateY(-12px); pointer-events: none;
-            transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            margin-top: 30px; transition-delay: 0s;
+            transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), margin-top 0.2s ease, max-height 0.2s ease;
+            margin-top: 0; max-height: 0; overflow: hidden; transition-delay: 0s;
         }
         .toggle-group:hover .toggle-sub,
         .toggle-group.expanded .toggle-sub {
             opacity: 1; transform: scale(1) translateY(0); pointer-events: auto;
+            max-height: 50px; margin-top: 30px; overflow: visible;
         }
         /* Staggered cascade: top → bottom on enter */
         .toggle-group:hover .toggle-sub:nth-child(2),
@@ -221,11 +223,11 @@
 
         .rotated { transform: rotate(180deg); }
         #toggle-right { transition: transform 0.3s ease; }
-        #toggle-right:hover { transform: rotate(180deg); }
-        #toggle-right.rotated:hover { transform: rotate(0deg); }
+        #toggle-right:hover { transform: translateY(-1px) rotate(180deg); }
+        #toggle-right.rotated:hover { transform: translateY(-1px) rotate(0deg); }
 
         /* --- 4. Content Area --- */
-        .content-container { max-width: var(--content-max-width); margin: 0 auto; padding: 100px 40px 180px; transition: max-width 0.3s var(--transition); width: 100%; box-sizing: border-box; }
+        .content-container { max-width: var(--content-max-width); margin: 0 auto; padding: 100px 40px 20px; transition: max-width 0.3s var(--transition); width: 100%; box-sizing: border-box; }
         .book-content { font-family: "Georgia", serif; font-size: var(--font-size); line-height: var(--line-height); color: var(--on-surface); }
         .book-content img { max-width: 100%; height: auto; display: block; margin: 0 auto; border-radius: 4px; }
         .book-content svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
@@ -240,6 +242,33 @@
         .book-content p:hover { background: color-mix(in srgb, var(--primary) 4%, transparent); }
         .nav-link { color: var(--primary); text-decoration: none; font-weight: 800; font-size: 0.8rem; letter-spacing: 0.1em; padding: 6px 14px; border-radius: 8px; transition: all 0.25s ease; }
         .nav-link:hover { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+        #chapter-indicator { position: absolute; left: 50%; transform: translateX(-50%); }
+        .chapter-nav {
+            display: flex; justify-content: space-between; align-items: center;
+            position: relative;
+            padding: 8px 40px; border-top: 1px solid var(--outline);
+            flex-shrink: 0; z-index: 50;
+            max-width: var(--content-max-width); margin: 0 auto; width: 100%; box-sizing: border-box;
+            background: color-mix(in srgb, #ffffff 88%, transparent);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
+        }
+        .chapter-nav.visible { opacity: 1; pointer-events: auto; }
+        [data-theme="sepia"] .chapter-nav { background: color-mix(in srgb, #FCF6E5 88%, transparent); }
+        [data-theme="dark"] .chapter-nav { background: color-mix(in srgb, #1A1A1C 88%, transparent); }
+
+        /* Magnetic scroll ring */
+        .mag-ring { display: flex; justify-content: center; padding: 40px 0; opacity: 0; transition: opacity 0.4s ease; }
+        .mag-ring.visible { opacity: 1; }
+        .mag-ring svg { width: 45px; height: 45px; }
+        .mag-ring .track { fill: none; stroke: var(--outline); stroke-width: 2; opacity: 0.5; }
+        .mag-ring .progress { fill: none; stroke: var(--primary); stroke-width: 2.5; stroke-linecap: round;
+            stroke-dasharray: 113; stroke-dashoffset: 113; transition: stroke-dashoffset 0.08s linear;
+            transform: rotate(-90deg); transform-origin: center;
+        }
+        .mag-ring .arrow { fill: none; stroke: var(--primary); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: 0.5; }
+        .mag-ring.visible .arrow { animation: magPulse 1.4s ease-in-out infinite; }
+        @keyframes magPulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.15; } }
         
         /* Floating para action buttons */
         #floating-para-btns { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 100; opacity: 0; transform: translateY(-50%) scale(0.9); transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -247,10 +276,37 @@
         #floating-para-btns.relocating { opacity: 0; transform: translateY(-50%) scale(0.9); transition: opacity 0.12s ease-out, transform 0.12s ease-out; }
         #floating-para-btns .p-btn { pointer-events: auto; opacity: 0.6; transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
         #floating-para-btns .p-btn:hover { opacity: 1; }
-        .p-btn { background: var(--surface); border: 1px solid var(--outline); width: 28px; height: 28px; border-radius: 7px; font-size: 0.65rem; font-weight: 800; color: var(--primary); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; overflow: visible; }
+        .p-btn { background: var(--surface); border: 1px solid var(--outline); width: 24px; height: 24px; border-radius: 7px; font-size: 0.65rem; font-weight: 800; color: var(--primary); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; overflow: visible; }
         .p-btn:hover { transform: scale(1.1); }
-        .p-translation { margin: 8px 0 4px; padding: 10px 14px; background: color-mix(in srgb, var(--primary) 8%, var(--surface)); border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0; font-size: 0.85em; line-height: 1.7; color: var(--on-surface); animation: fadeIn 0.3s; }
-        .p-translation .loading-hint { color: var(--secondary); font-size: 0.8em; }
+        .book-content p:has(+ .p-translation:not(.collapsed)) { margin-bottom: 1rem; }
+        .p-translation { margin: 0 0 1.5rem; padding: 10px 14px; position: relative; background: color-mix(in srgb, var(--primary) 8%, var(--surface)); border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0; font-size: 0.85em; line-height: 1.7; color: var(--on-surface); animation: fadeIn 0.3s; overflow: visible; transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease, padding 0.3s ease; }
+        .p-translation.collapsed { max-height: 0; opacity: 0; margin: 0; padding: 0 14px; pointer-events: none; overflow: hidden; }
+        .trans-actions {
+            position: absolute; left: -40px; top: 50%; transform: translateY(-50%);
+            display: flex; flex-direction: column; gap: 2px;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+        }
+        .trans-actions::before { content: ''; position: absolute; right: -10px; top: 0; width: 10px; height: 100%; }
+        .p-translation:hover .trans-actions,
+        .trans-actions:hover { opacity: 1; pointer-events: auto; }
+        .trans-actions button {
+            width: 26px; height: 26px; border-radius: 50%; border: none;
+            background: transparent; color: var(--secondary);
+            font-size: 13px; line-height: 26px; text-align: center;
+            cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .trans-actions button:hover { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); color: var(--primary); }
+        .trans-actions button svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .trans-actions .act-del:hover { color: #EF4444; background: rgba(239,68,68,0.08); }
+        .p-translation .loading-hint { color: var(--on-surface); font-size: 0.85em; opacity: 0.7; }
+        @keyframes blink { 50% { opacity: 0; } }
+        .p-translation .loading-hint { color: var(--on-surface); font-size: 0.85em; opacity: 0.7; line-height: 1.8; }
+        .p-translation .loading-hint .typewriter-cursor {
+            display: inline-block; width: 2px; height: 1em; background: var(--primary);
+            vertical-align: text-bottom; margin-left: 2px;
+            animation: blink 1s step-end infinite;
+        }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 0.85; transform: none; } }
 
         /* --- 5. Settings Card --- */
@@ -516,11 +572,16 @@
         @keyframes tipReveal { to { opacity: 0.7; } }
 
         /* AI Panel Content */
+        #ai-chat-input { transition: border-color 0.25s ease, box-shadow 0.25s ease; }
         #ai-chat-input::placeholder { color: var(--secondary); opacity: 0.4; font-size: 0.8rem; }
-        .ai-content { flex: 1; overflow-y: auto; padding: 16px 24px; }
+        #ai-chat-input:focus { border-color: var(--primary) !important; box-shadow: 0 0 0 4.5px color-mix(in srgb, var(--primary) 12%, transparent); }
+        .ai-content { flex: 1; overflow-y: auto; padding: 16px 24px; -webkit-mask-image: linear-gradient(to bottom, black, black); mask-image: linear-gradient(to bottom, black, black); }
+        .ai-content.fade-top { -webkit-mask-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.3) 10px, rgba(0,0,0,0.7) 20px, black 30px); mask-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.3) 10px, rgba(0,0,0,0.7) 20px, black 30px); }
+        .ai-content.fade-bottom { -webkit-mask-image: linear-gradient(to bottom, black, black calc(100% - 60px), rgba(0,0,0,0.7) calc(100% - 40px), rgba(0,0,0,0.3) calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, black, black calc(100% - 60px), rgba(0,0,0,0.7) calc(100% - 40px), rgba(0,0,0,0.3) calc(100% - 20px), transparent); }
+        .ai-content.fade-top.fade-bottom { -webkit-mask-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.3) 10px, rgba(0,0,0,0.7) 20px, black 30px, black calc(100% - 60px), rgba(0,0,0,0.7) calc(100% - 40px), rgba(0,0,0,0.3) calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.3) 10px, rgba(0,0,0,0.7) 20px, black 30px, black calc(100% - 60px), rgba(0,0,0,0.7) calc(100% - 40px), rgba(0,0,0,0.3) calc(100% - 20px), transparent); }
         .analysis-card { padding: 16px 0; margin-bottom: 4px; }
         .analysis-card + .analysis-card { padding-top: 12px; margin-top: 4px; border-top: 1px solid color-mix(in srgb, var(--outline) 50%, transparent); }
-        .analysis-label { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: var(--secondary); margin-bottom: 8px; }
+        .analysis-label { font-size: 0.78rem; font-weight: 750; letter-spacing: 0.08em; color: var(--primary); margin-bottom: 8px; }
         .analysis-text { font-size: 0.9rem; line-height: 1.6; color: var(--on-surface); }
 
         /* iOS 18-style toggle switch */
@@ -571,24 +632,55 @@
         .stop-btn:hover { opacity: 1; color: var(--primary); border-color: var(--primary); }
 
         /* Chat bubbles */
-        .chat-bubble { margin-bottom: 12px; padding: 14px 16px 14px 40px; border-radius: 12px; font-size: 0.9rem; line-height: 1.6; position: relative; }
-        .chat-bubble::before { position: absolute; top: 12px; left: 12px; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; }
-        .chat-bubble.user::before { content: ''; background: rgba(255,255,255,0.2); background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z'/%3E%3C/svg%3E"); background-size: 12px; background-repeat: no-repeat; background-position: center; }
-        .chat-bubble.ai::before { content: '✦'; background: rgba(0,0,0,0.06); color: var(--primary); font-size: 10px; line-height: 20px; text-align: center; }
-        .chat-bubble .msg-del {
-            position: absolute; top: 6px; right: 6px;
-            width: 18px; height: 18px; border-radius: 50%; border: none;
-            background: rgba(0,0,0,0.08); color: var(--secondary);
-            font-size: 12px; line-height: 18px; text-align: center;
-            cursor: pointer; opacity: 0; transition: opacity 0.2s; padding: 0;
+        @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .chat-bubble { margin-bottom: 0; padding: 18px 18px; border-radius: 15px; font-size: 0.78rem; line-height: 1.7; position: relative; margin-top: 69px; animation: bubbleIn 0.35s ease-out; transition: box-shadow 0.25s ease, transform 0.25s ease; }
+        .chat-bubble:first-child { margin-top: 45px; }
+        .chat-bubble::before, .chat-bubble.user::after, .chat-bubble.ai::after { display: none; }
+        /* Icon system — user: warm primary tint, AI: cool neutral tint */
+        .bubble-icon { position: absolute; top: -39px; left: 0; width: 24px; height: 24px; border-radius: 50%; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease; cursor: default; }
+        .bubble-icon .icon-bg { width: 24px; height: 24px; border-radius: 50%; border: 1px solid transparent; transition: border-color 0.3s ease, background 0.3s ease; }
+        .bubble-icon.user .icon-bg { background: color-mix(in srgb, var(--primary) 20%, var(--surface)); }
+        .bubble-icon.ai .icon-bg { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+        .bubble-icon .icon-fg { position: absolute; top: 0; left: 0; width: 24px; height: 24px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s ease; }
+        .bubble-icon.user .icon-fg { background: color-mix(in srgb, var(--primary) 55%, var(--secondary)); -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z'/%3E%3C/svg%3E"); -webkit-mask-size: 14px; mask-size: 14px; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+        .bubble-icon.ai .icon-fg { color: var(--primary); font-size: 18px; line-height: 24px; text-align: center; }
+        /* Icon hover — unified: scale + border + shadow; differentiated: user brightens, AI rotates */
+        .bubble-icon:hover { transform: scale(1.06); box-shadow: 0 3px 9px rgba(0,0,0,0.12); }
+        .bubble-icon:hover .icon-bg { border-color: var(--primary); }
+        .bubble-icon.user:hover .icon-fg { background: color-mix(in srgb, var(--primary) 75%, var(--secondary)); }
+        .bubble-icon.ai:hover .icon-fg { transform: rotate(90deg) scale(1.1); }
+        /* Bubble action bar — Gemini style, outside left of bubble */
+        .bubble-actions {
+            position: absolute; bottom: 0; transform: none;
+            display: flex; flex-direction: row; gap: 2px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.2s ease;
         }
-        .chat-bubble:hover .msg-del { opacity: 0.5; }
-        .chat-bubble .msg-del:hover { opacity: 1; background: rgba(0,0,0,0.15); }
-        .chat-bubble.user .msg-del { background: rgba(255,255,255,0.2); color: white; }
-        .chat-bubble.user .msg-del:hover { background: rgba(255,255,255,0.35); }
-        .chat-bubble.user { background: var(--primary); color: white; margin-left: 24px; border-bottom-right-radius: 4px; }
-        .chat-bubble.ai { background: var(--outline); color: var(--on-surface); margin-right: 24px; border-bottom-left-radius: 4px; }
-        .chat-bubble.ai h3, .chat-bubble.ai h4 { margin: 12px 0 6px; font-size: 0.92rem; font-weight: 700; }
+        .chat-bubble.user .bubble-actions { right: calc(100% + 6px); }
+        .chat-bubble.ai .bubble-actions { left: 0; top: calc(100% + 6px); bottom: auto; margin-bottom: 12px; }
+        /* Bridge the gap so hover doesn't break */
+        .bubble-actions::before {
+            content: ''; position: absolute;
+        }
+        .chat-bubble.user .bubble-actions::before { top: 0; right: -6px; width: 6px; height: 100%; }
+        .chat-bubble.ai .bubble-actions::before { left: 0; top: -6px; width: 100%; height: 6px; }
+        .chat-bubble:hover .bubble-actions,
+        .bubble-actions:hover { opacity: 1; pointer-events: auto; }
+        .bubble-actions button {
+            width: 26px; height: 26px; border-radius: 50%; border: none;
+            background: transparent; color: var(--secondary);
+            font-size: 13px; line-height: 26px; text-align: center;
+            cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .bubble-actions button:hover { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); color: var(--primary); }
+        .bubble-actions button svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .bubble-actions .act-del:hover { color: #EF4444; background: rgba(239,68,68,0.08); }
+        .chat-bubble.user { background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, var(--surface)), color-mix(in srgb, var(--primary) 78%, var(--surface))); color: white; margin-left: 90px; border-bottom-right-radius: 2px; box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 15%, transparent); }
+        .chat-bubble.user:hover { box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 28%, transparent); transform: translateY(-1px); }
+        .chat-bubble.ai { background: color-mix(in srgb, var(--outline) 45%, var(--surface)); color: var(--on-surface); margin-left: 0; margin-right: 0; border-bottom-left-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+        .chat-bubble.ai:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-1px); }
+        .chat-bubble.ai h3, .chat-bubble.ai h4 { margin: 12px 0 6px; font-size: 0.85rem; font-weight: 700; }
         .chat-bubble.ai h3:first-child, .chat-bubble.ai h4:first-child { margin-top: 0; }
         .chat-bubble.ai p { margin: 0 0 8px; }
         .chat-bubble.ai p:last-child { margin-bottom: 0; }
@@ -597,7 +689,7 @@
         .chat-bubble.ai code { font-size: 0.85em; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
         .chat-bubble.ai pre { margin: 8px 0; padding: 10px 12px; background: rgba(0,0,0,0.06); border-radius: 8px; overflow-x: auto; }
         .chat-bubble.ai pre code { background: none; padding: 0; }
-        .chat-bubble.ai strong { font-weight: 700; }
+        .chat-bubble.ai strong { font-weight: 700; font-size: 0.85rem; }
         .chat-bubble-label { font-size: 0.6rem; font-weight: 900; margin-bottom: 6px; opacity: 0.6; letter-spacing: 0.1em; }
 
         /* Session List */
@@ -629,8 +721,9 @@
         /* Quick Action Chips */
         .quick-actions { display: flex; flex-wrap: nowrap; gap: 6px; padding: 10px 24px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
         .quick-actions::-webkit-scrollbar { display: none; }
-        .quick-btn { background: none; border: 1.5px solid var(--outline); padding: 5px 12px; border-radius: 18px; font-size: 0.75rem; font-weight: 600; color: var(--secondary); cursor: pointer; transition: 0.2s; white-space: nowrap; flex-shrink: 0; }
-        .quick-btn:hover { border-color: var(--primary); color: var(--primary); background: color-mix(in srgb, var(--primary) 4%, transparent); }
+        .quick-btn { background: color-mix(in srgb, var(--secondary) 6%, var(--surface)); border: 1px solid color-mix(in srgb, var(--outline) 30%, transparent); padding: 6px 14px; border-radius: 15px; font-size: 0.75rem; font-weight: 500; color: var(--secondary); cursor: pointer; transition: all 0.2s ease; white-space: nowrap; flex-shrink: 0; }
+        .quick-btn:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); border-color: color-mix(in srgb, var(--primary) 25%, transparent); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .quick-btn:active { transform: translateY(0) scale(0.97); box-shadow: none; }
 
         /* Empty state */
         .ai-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--secondary); gap: 8px; opacity: 0.5; }
@@ -687,7 +780,7 @@
         @keyframes storyFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
         /* --- Reading Progress Bar --- */
-        #reading-progress-bar { position: sticky; top: 0; width: 100%; height: 2px; z-index: 100; pointer-events: none; flex-shrink: 0; }
+        #reading-progress-bar { position: sticky; top: 0; width: 100%; height: 2px; z-index: 2100; pointer-events: none; flex-shrink: 0; }
         #reading-progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.1s linear; }
 
         /* --- Reading Stats Bar (Kindle-style) --- */
@@ -863,12 +956,13 @@
             <div id="reading-progress-bar"><div id="reading-progress-fill"></div></div>
             <div class="content-container">
                 <div id="readable-content" class="book-content">{{ chapter_content | safe }}</div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 100px; padding-top: 40px; border-top: 1px solid var(--outline);">
-                    {% if prev_idx is not none %}<a href="/read/{{ book_id }}/{{ prev_idx }}" onclick="sessionStorage.setItem('sidebar_scroll', document.getElementById('sidebar').scrollTop)" class="nav-link">PREVIOUS</a>{% endif %}
-                    <span id="chapter-indicator" class="nav-link" style="font-variant-numeric: tabular-nums; cursor: pointer;" onclick="ChapterJump.show()">{{ chapter_index + 1 }} / {{ book.spine|length }}</span>
-                    {% if next_idx is not none %}<a href="/read/{{ book_id }}/{{ next_idx }}" onclick="sessionStorage.setItem('sidebar_scroll', document.getElementById('sidebar').scrollTop)" class="nav-link">NEXT</a>{% endif %}
-                </div>
+                {% if next_idx is not none %}<div class="mag-ring"><svg viewBox="0 0 44 44"><circle class="track" cx="22" cy="22" r="18"/><circle class="progress" cx="22" cy="22" r="18"/><polyline class="arrow" points="16,19 22,25 28,19"/></svg></div>{% endif %}
             </div>
+        </div>
+        <div class="chapter-nav">
+            {% if prev_idx is not none %}<a href="/read/{{ book_id }}/{{ prev_idx }}" onclick="sessionStorage.setItem('sidebar_scroll', document.getElementById('sidebar').scrollTop)" class="nav-link">PREVIOUS</a>{% endif %}
+            <span id="chapter-indicator" class="nav-link" style="font-variant-numeric: tabular-nums; cursor: pointer;" onclick="ChapterJump.show()">{{ chapter_index + 1 }} / {{ book.spine|length }}</span>
+            {% if next_idx is not none %}<a href="/read/{{ book_id }}/{{ next_idx }}" onclick="sessionStorage.setItem('sidebar_scroll', document.getElementById('sidebar').scrollTop)" class="nav-link">NEXT</a>{% endif %}
         </div>
         <div id="reading-stats" onclick="ReadingStats.cycle()"><span id="reading-stats-text"></span><span id="reading-stats-dot">&#9679;</span></div>
     </div>
@@ -879,8 +973,8 @@
         <div id="ai-panel" style="display: flex; flex-direction: column; height: 100%;">
             <div style="padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
                 <div style="display: flex; align-items: baseline; gap: 6px; cursor: pointer;" onclick="AI.showStory()">
-                    <span id="panel-title" style="font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; color: var(--secondary);" data-i18n="Marginia">Marginia</span>
-                    <span id="panel-subtitle" style="font-size: 0.65rem; color: var(--on-surface); opacity: 0.4; margin-left: 4px;" data-i18n="your AI reading companion">your AI reading companion</span>
+                    <span id="panel-title" style="font-size: 1rem; font-weight: 800; letter-spacing: 0.1em; color: var(--on-surface);" data-i18n="Marginia">Marginia</span>
+                    <span id="panel-subtitle" style="font-size: 0.75rem; color: var(--on-surface); opacity: 0.75; margin-left: 4px; letter-spacing: 0.15em;" data-i18n="your AI reading companion">your AI reading companion</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 2px;">
                     <button onclick="AI.showSessionList()" class="icon-btn" title="Chat history" data-i18n-title="Chat history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
@@ -902,7 +996,7 @@
                 <button class="quick-btn" data-i18n="Characters" onclick="AI.quickAction('characters')">Characters</button>
                 <button class="quick-btn" data-i18n="Further Reading" onclick="AI.quickAction('reading')">Further Reading</button>
             </div>
-            <div style="padding: 12px 24px; background: color-mix(in srgb, var(--outline) 30%, var(--surface));"><textarea id="ai-chat-input" rows="5" style="width: 100%; border: 1.5px solid var(--outline); border-radius: 12px; padding: 10px 16px; outline: none; font-size: 0.9rem; background: var(--surface); color: var(--on-surface); resize: none; font-family: inherit; line-height: 1.5;" placeholder="Ask anything about this chapter…&#10;&quot;What does the author mean by…&quot;&#10;&quot;Explain the concept of…&quot;&#10;&quot;Translate this paragraph&quot;&#10;Enter to send · Shift+Enter for new line" data-i18n-placeholder="Ask anything about this chapter…\n&quot;What does the author mean by…&quot;\n&quot;Explain the concept of…&quot;\n&quot;Translate this paragraph&quot;\nEnter to send · Shift+Enter for new line"></textarea></div>
+            <div style="padding: 12px 24px;"><textarea id="ai-chat-input" rows="5" style="width: 100%; border: 1.5px solid color-mix(in srgb, var(--primary) 60%, var(--outline)); border-radius: 15px; padding: 10px 16px; outline: none; font-size: 0.9rem; background: var(--surface); color: var(--on-surface); resize: none; font-family: inherit; line-height: 1.5;" placeholder="Ask anything about this chapter…&#10;&quot;What does the author mean by…&quot;&#10;&quot;Explain the concept of…&quot;&#10;&quot;Translate this paragraph&quot;&#10;Enter to send · Shift+Enter for new line" data-i18n-placeholder="Ask anything about this chapter…\n&quot;What does the author mean by…&quot;\n&quot;Explain the concept of…&quot;\n&quot;Translate this paragraph&quot;\nEnter to send · Shift+Enter for new line"></textarea></div>
             <div id="audio-console">
                 <div class="progress-line"><div id="audio-progress" class="progress-fill"></div></div>
                 <div class="player-actions">
@@ -1078,7 +1172,7 @@
             'Analyzing...': '分析中...', 'Thinking...': '思考中...', 'Translating...': '翻译中...',
             'Analysis service temporarily unavailable': '分析服务暂时不可用',
             'Translation service temporarily unavailable': '翻译服务暂时不可用',
-            'Translating, please wait...': '正在翻译，请稍候...',
+            'Translating, please wait...': 'A glimmer of magic, words quietly drifting past the wall of language…\n\n魔法点亮微光，文字正悄然越过语言的墙…… ',
             'Translation': '翻译', 'Translation failed': '翻译失败',
             // Analysis cards
             'Summary': '叙事总结', 'Key Points': '核心冲突',
@@ -1113,7 +1207,7 @@
             'Searching...': '搜索中...',
             'results found': '个结果', 'No results found': '未找到结果',
             'Marginia': '知白',
-            'your AI reading companion': '您的AI书伴',
+            'your AI reading companion': '你的AI书伴，一起读懂字里行间。',
         };
         function t(key) { return (state.language === 'zh' && _i18n[key]) ? _i18n[key] : key; }
         function _md(s) {
@@ -1412,9 +1506,9 @@
 
                     if (!hideTTS && !hideTrans) {
                         playBtn.style.position = 'absolute';
-                        playBtn.style.top = '-18px';
+                        playBtn.style.top = '-30px';
                         transBtn.style.position = 'absolute';
-                        transBtn.style.top = '18px';
+                        transBtn.style.top = '6px';
                     } else {
                         playBtn.style.position = '';
                         playBtn.style.top = '';
@@ -1426,7 +1520,27 @@
                         const containerRect = contentContainer.getBoundingClientRect();
                         const pRect = p.getBoundingClientRect();
                         const midY = pRect.top + pRect.height / 2 - containerRect.top;
-                        container.style.left = (pRect.left - containerRect.left - 48) + 'px';
+                        const btnScreenX = pRect.left - 45;
+                        const btnScreenY = pRect.top + pRect.height / 2;
+                        // Hide if overlapping with top-left toggle group or top-right toggle
+                        const vpW = window.innerWidth;
+                        const toggleLeft = document.querySelector('.toggle-group');
+                        const toggleRight = document.getElementById('toggle-right');
+                        const safeMargin = 12;
+                        let hidden = false;
+                        if (toggleLeft) {
+                            const tlR = toggleLeft.getBoundingClientRect();
+                            if (btnScreenX < tlR.right + safeMargin && btnScreenY < tlR.bottom + safeMargin) hidden = true;
+                        }
+                        if (toggleRight) {
+                            const trR = toggleRight.getBoundingClientRect();
+                            if (btnScreenX + 24 > trR.left - safeMargin && btnScreenY < trR.bottom + safeMargin) hidden = true;
+                        }
+                        if (hidden) {
+                            container.classList.remove('visible');
+                            return;
+                        }
+                        container.style.left = (pRect.left - containerRect.left - 45) + 'px';
                         container.style.top = midY + 'px';
                     };
 
@@ -1554,6 +1668,18 @@
                     this._abortCtrl = null;
                 }
             },
+            _addIcon(bubble, role) {
+                const icon = document.createElement('div');
+                icon.className = `bubble-icon ${role}`;
+                const bg = document.createElement('div');
+                bg.className = 'icon-bg';
+                const fg = document.createElement('div');
+                fg.className = 'icon-fg';
+                if (role === 'ai') fg.textContent = '✦';
+                icon.appendChild(bg);
+                icon.appendChild(fg);
+                bubble.appendChild(icon);
+            },
             _hideEmpty() {
                 const el = document.getElementById('ai-empty-state');
                 if (el) el.style.display = 'none';
@@ -1564,13 +1690,72 @@
             _scrollBottom() {
                 const c = document.getElementById('ai-content');
                 c.scrollTop = c.scrollHeight;
+                this._updateFade();
+            },
+            _scrollTo(el) {
+                const c = document.getElementById('ai-content');
+                const elTop = el.offsetTop - c.offsetTop;
+                c.scrollTop = Math.max(0, elTop - 50);
+                this._updateFade();
+            },
+            _updateFade() {
+                const c = document.getElementById('ai-content');
+                if (!c) return;
+                const top = c.scrollTop > 5;
+                const bottom = c.scrollTop + c.clientHeight < c.scrollHeight - 5;
+                c.classList.toggle('fade-top', top);
+                c.classList.toggle('fade-bottom', bottom);
+            },
+            _initFade() {
+                const c = document.getElementById('ai-content');
+                if (c && !c._fadeInit) {
+                    c.addEventListener('scroll', () => AI._updateFade());
+                    new MutationObserver(() => AI._updateFade()).observe(c, { childList: true, subtree: true, characterData: true });
+                    c._fadeInit = true;
+                }
+                this._updateFade();
             },
             _addDelBtn(bubble, msgId) {
-                const btn = document.createElement('button');
-                btn.className = 'msg-del';
-                btn.textContent = '×';
-                btn.onclick = (e) => { e.stopPropagation(); AI.deleteMessage(msgId); };
-                bubble.appendChild(btn);
+                const bar = document.createElement('div');
+                bar.className = 'bubble-actions';
+                const isUser = bubble.classList.contains('user');
+
+                // Copy button
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'act-copy';
+                copyBtn.title = '复制';
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+                copyBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(bubble.textContent.trim());
+                    copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+                    setTimeout(() => { copyBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>'; }, 1500);
+                };
+                bar.appendChild(copyBtn);
+
+                // Edit button (user only)
+                if (isUser) {
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'act-edit';
+                    editBtn.title = '编辑';
+                    editBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        const input = document.getElementById('ai-chat-input');
+                        if (input) { input.value = bubble.textContent.trim(); input.focus(); }
+                    };
+                    bar.appendChild(editBtn);
+                }
+
+                // Delete button
+                const delBtn = document.createElement('button');
+                delBtn.className = 'act-del';
+                delBtn.title = '删除';
+                delBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
+                delBtn.onclick = (e) => { e.stopPropagation(); AI.deleteMessage(msgId); };
+                bar.appendChild(delBtn);
+
+                bubble.appendChild(bar);
                 bubble.dataset.msgId = msgId;
             },
             _currentSession() {
@@ -1608,6 +1793,7 @@
                     bubble.className = `chat-bubble ${msg.role}`;
                     bubble.innerHTML = msg.html;
                     this._addDelBtn(bubble, msg.id);
+                    this._addIcon(bubble, msg.role);
                     history.appendChild(bubble);
                 });
             },
@@ -1646,6 +1832,7 @@
                 this._persistChat();
                 // Clear display
                 document.getElementById('ai-chat-history').innerHTML = '';
+                this._updateFade();
                 const story = document.getElementById('marginia-story');
                 if (story) story.remove();
                 document.getElementById('ai-empty-state').style.display = '';
@@ -1678,6 +1865,7 @@
                         state.chatMessages = [];
                         document.getElementById('ai-chat-history').innerHTML = '';
                         document.getElementById('ai-empty-state').style.display = '';
+                        AI._updateFade();
                     }
                 }
                 this._persistChat();
@@ -1770,6 +1958,7 @@
                 userBubble.textContent = t(this._labels[type]);
                 const uMsg = this._saveMsg('user', userBubble.innerHTML);
                 this._addDelBtn(userBubble, uMsg.id);
+                this._addIcon(userBubble, 'user');
                 history.appendChild(userBubble);
 
                 if (type === 'summarize') {
@@ -1779,6 +1968,9 @@
                 }
             },
             async _analyze() {
+                // Abort any in-progress request
+                if (this._abortCtrl) { this._abortCtrl.abort(); this._abortCtrl = null; }
+
                 const history = document.getElementById('ai-chat-history');
                 const cacheKey = `analysis_${state.bookId}_${state.chapterIndex}`;
 
@@ -1788,23 +1980,28 @@
                     bubble.innerHTML = this._formatAnalysis(cache.get(cacheKey));
                     const aMsg = this._saveMsg('ai', bubble.innerHTML);
                     this._addDelBtn(bubble, aMsg.id);
+                    this._addIcon(bubble, 'ai');
                     history.appendChild(bubble);
-                    this._scrollBottom();
+                    this._scrollTo(bubble);
                     return;
                 }
 
                 const bubble = document.createElement('div');
                 bubble.className = 'chat-bubble ai';
                 bubble.innerHTML = this._loadingHtml(t('Analyzing...'));
+                this._addIcon(bubble, 'ai');
                 history.appendChild(bubble);
                 this._scrollBottom();
 
                 this._abortCtrl = new AbortController();
                 try {
                     const resp = await fetch('/api/ai/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ book_id: state.bookId, chapter_index: state.chapterIndex }), signal: this._abortCtrl.signal });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                     const data = await resp.json();
+                    if (!data.summary && !data.key_points) throw new Error('Empty analysis');
                     cache.set(cacheKey, data);
                     bubble.innerHTML = this._formatAnalysis(data);
+                    this._addIcon(bubble, 'ai');
                     const aMsg = this._saveMsg('ai', bubble.innerHTML);
                     this._addDelBtn(bubble, aMsg.id);
                 } catch (e) {
@@ -1816,7 +2013,7 @@
                 } finally {
                     this._abortCtrl = null;
                 }
-                this._scrollBottom();
+                this._scrollTo(bubble);
             },
             _formatAnalysis(data) {
                 const kpHtml = data.key_points ? data.key_points.map(p => `<li>${_md(p)}</li>`).join('') : '';
@@ -1828,10 +2025,14 @@
                 `;
             },
             async _chatRequest(question) {
+                // Abort any in-progress request
+                if (this._abortCtrl) { this._abortCtrl.abort(); this._abortCtrl = null; }
+
                 const history = document.getElementById('ai-chat-history');
                 const aiBubble = document.createElement('div');
                 aiBubble.className = 'chat-bubble ai';
                 aiBubble.innerHTML = this._loadingHtml(t('Thinking...'));
+                this._addIcon(aiBubble, 'ai');
                 history.appendChild(aiBubble);
                 this._scrollBottom();
 
@@ -1843,14 +2044,32 @@
                         body: JSON.stringify({ book_id: state.bookId, chapter_index: state.chapterIndex, question }),
                         signal: this._abortCtrl.signal
                     });
-                    const data = await resp.json();
-                    if (data.detail) throw new Error(data.detail);
-                    aiBubble.innerHTML = _md(data.answer);
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({}));
+                        throw new Error(err.detail || `HTTP ${resp.status}`);
+                    }
+                    const reader = resp.body.getReader();
+                    const decoder = new TextDecoder();
+                    let raw = '', first = true;
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        if (first) { aiBubble.innerHTML = ''; first = false; }
+                        raw += decoder.decode(value, { stream: true });
+                        aiBubble.innerHTML = _md(raw);
+                        this._scrollBottom();
+                    }
                     const aMsg = this._saveMsg('ai', aiBubble.innerHTML);
                     this._addDelBtn(aiBubble, aMsg.id);
                 } catch (e) {
                     if (e.name === 'AbortError') {
-                        aiBubble.innerHTML = `<span style="opacity:0.4">${t('Stopped')}</span>`;
+                        if (raw) {
+                            aiBubble.innerHTML = _md(raw) + `<span style="opacity:0.4; display:block; margin-top:8px; font-size:0.85em">${t('Stopped')}</span>`;
+                            const aMsg = this._saveMsg('ai', aiBubble.innerHTML);
+                            this._addDelBtn(aiBubble, aMsg.id);
+                        } else {
+                            aiBubble.innerHTML = `<span style="opacity:0.4">${t('Stopped')}</span>`;
+                        }
                     } else {
                         aiBubble.innerHTML = `<span style="opacity:0.5">${e.message}</span>`;
                     }
@@ -1870,11 +2089,13 @@
                 userBubble.textContent = text.length > 80 ? text.substring(0, 80) + '...' : text;
                 const uMsg = this._saveMsg('user', userBubble.innerHTML);
                 this._addDelBtn(userBubble, uMsg.id);
+                this._addIcon(userBubble, 'user');
                 history.appendChild(userBubble);
 
                 const bubble = document.createElement('div');
                 bubble.className = 'chat-bubble ai';
                 bubble.innerHTML = this._loadingHtml(t('Translating...'));
+                this._addIcon(bubble, 'ai');
                 history.appendChild(bubble);
                 this._scrollBottom();
 
@@ -1896,13 +2117,107 @@
                 }
                 this._scrollBottom();
             },
+            _transKey() { return `trans_${state.bookId}_${state.chapterIndex}`; },
+            _saveTranslations() {
+                const paras = document.querySelectorAll('#readable-content p');
+                const data = {};
+                paras.forEach((p, i) => {
+                    const t = p.nextElementSibling;
+                    if (t && t.classList.contains('p-translation') && !t.querySelector('.loading-hint')) {
+                        const clone = t.cloneNode(true);
+                        const actions = clone.querySelector('.trans-actions');
+                        if (actions) actions.remove();
+                        data[i] = { text: clone.textContent, collapsed: t.classList.contains('collapsed') };
+                    }
+                });
+                if (Object.keys(data).length) localStorage.setItem(this._transKey(), JSON.stringify(data));
+                else localStorage.removeItem(this._transKey());
+            },
+            restoreTranslations() {
+                const raw = localStorage.getItem(this._transKey());
+                if (!raw) return;
+                try {
+                    const data = JSON.parse(raw);
+                    const paras = document.querySelectorAll('#readable-content p');
+                    Object.entries(data).forEach(([i, val]) => {
+                        const p = paras[parseInt(i)];
+                        if (!p) return;
+                        // Support legacy format (plain string) and new format ({text, collapsed})
+                        const text = typeof val === 'string' ? val : val.text;
+                        const collapsed = typeof val === 'object' && val.collapsed;
+                        const div = document.createElement('div');
+                        div.className = 'p-translation' + (collapsed ? ' collapsed' : '');
+                        div.textContent = text;
+                        this._addTransClose(div, p);
+                        p.after(div);
+                    });
+                } catch(e) {}
+            },
+            _addTransClose(div, pEl) {
+                pEl._transBlock = div;
+                const bar = document.createElement('div');
+                bar.className = 'trans-actions';
+
+                // Collapse button
+                const collapseBtn = document.createElement('button');
+                collapseBtn.title = '收起';
+                collapseBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>';
+                collapseBtn.onclick = (e) => { e.stopPropagation(); div.classList.add('collapsed'); this._saveTranslations(); };
+                bar.appendChild(collapseBtn);
+
+                // Refresh button
+                const refreshBtn = document.createElement('button');
+                refreshBtn.title = '重新翻译';
+                refreshBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>';
+                refreshBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    div.remove();
+                    pEl._transBlock = null;
+                    this._saveTranslations();
+                    this.translateInline(pEl);
+                };
+                bar.appendChild(refreshBtn);
+
+                // Delete button
+                const delBtn = document.createElement('button');
+                delBtn.className = 'act-del';
+                delBtn.title = '删除翻译';
+                delBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>';
+                delBtn.onclick = (e) => { e.stopPropagation(); div.remove(); pEl._transBlock = null; this._saveTranslations(); };
+                bar.appendChild(delBtn);
+
+                div.appendChild(bar);
+            },
             async translateInline(pEl) {
-                const existing = pEl.nextElementSibling;
-                if (existing && existing.classList.contains('p-translation')) { existing.remove(); return; }
+                // Toggle: if already translated, show/hide
+                const existing = pEl._transBlock;
+                if (existing && existing.parentNode) {
+                    const hidden = existing.classList.toggle('collapsed');
+                    this._saveTranslations();
+                    return;
+                }
                 const text = pEl.dataset.text || pEl.innerText;
                 const div = document.createElement('div');
                 div.className = 'p-translation';
-                div.innerHTML = '<span class="loading-hint">' + t('Translating, please wait...') + '</span>';
+                pEl._transBlock = div;
+                div.innerHTML = '<span class="loading-hint"></span>';
+                const hint = div.querySelector('.loading-hint');
+                const fullText = t('Translating, please wait...');
+                let ti = 0;
+                const cursor = document.createElement('span');
+                cursor.className = 'typewriter-cursor';
+                const typeNext = () => {
+                    if (ti >= fullText.length) return;
+                    const ch = fullText[ti];
+                    if (ch === '\n') { hint.insertBefore(document.createElement('br'), cursor); }
+                    else { hint.insertBefore(document.createTextNode(ch), cursor); }
+                    ti++;
+                    const next = fullText[ti];
+                    const isCJK = next && next.charCodeAt(0) > 0x2e80;
+                    typeTimer = setTimeout(typeNext, isCJK ? 120 : 70);
+                };
+                let typeTimer = setTimeout(typeNext, 70);
+                hint.appendChild(cursor);
                 pEl.after(div);
                 try {
                     const resp = await fetch('/api/ai/translate-stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, book_id: state.bookId, chapter_index: state.chapterIndex }) });
@@ -1912,9 +2227,11 @@
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
-                        if (first) { div.textContent = ''; first = false; }
+                        if (first) { clearTimeout(typeTimer); div.textContent = ''; first = false; }
                         div.textContent += decoder.decode(value, { stream: true });
                     }
+                    this._addTransClose(div, pEl);
+                    this._saveTranslations();
                 } catch (e) {
                     div.textContent = t('Translation service temporarily unavailable');
                 }
@@ -1935,6 +2252,7 @@
                 userBubble.textContent = question;
                 const uMsg = this._saveMsg('user', userBubble.innerHTML);
                 this._addDelBtn(userBubble, uMsg.id);
+                this._addIcon(userBubble, 'user');
                 history.appendChild(userBubble);
 
                 await this._chatRequest(question);
@@ -1960,6 +2278,7 @@
                 const story = document.getElementById('marginia-story');
                 if (story) {
                     story.remove();
+                    document.getElementById('ai-chat-history').style.display = '';
                     if (!document.getElementById('ai-chat-history').innerHTML.trim()) {
                         document.getElementById('ai-empty-state').style.display = '';
                     }
@@ -1968,7 +2287,15 @@
             showStory() {
                 this._hideEmpty();
                 const existing = document.getElementById('marginia-story');
-                if (existing) { existing.remove(); document.getElementById('ai-empty-state').style.display = ''; return; }
+                if (existing) {
+                    existing.remove();
+                    document.getElementById('ai-chat-history').style.display = '';
+                    if (!document.getElementById('ai-chat-history').innerHTML.trim()) {
+                        document.getElementById('ai-empty-state').style.display = '';
+                    }
+                    return;
+                }
+                document.getElementById('ai-chat-history').style.display = 'none';
                 const content = document.getElementById('ai-content');
                 const story = document.createElement('div');
                 story.id = 'marginia-story';
@@ -2623,6 +2950,7 @@
                 const userBubble = document.createElement('div');
                 userBubble.className = 'chat-bubble user';
                 userBubble.textContent = t('Notebook');
+                AI._addIcon(userBubble, 'user');
                 history.appendChild(userBubble);
 
                 const bubble = document.createElement('div');
@@ -2644,6 +2972,7 @@
                     });
                     bubble.innerHTML = html;
                 }
+                AI._addIcon(bubble, 'ai');
                 history.appendChild(bubble);
                 AI._scrollBottom();
             },
@@ -3396,8 +3725,80 @@
             }
         };
 
-        UX.init(); Audio.init(); Highlights.init(); Progress.init(); ReadingStats.init(); Sel.init();
+        // ─── Magnetic Scroll Nav ───
+        const MagneticNav = {
+            _accum: 0,
+            _threshold: 600,
+            _timer: null,
+            _nextHref: null,
+            _ring: null,
+            _ringWrap: null,
+
+            init() {
+                const main = document.getElementById('main-scroll');
+                const nav = document.querySelector('.chapter-nav');
+                if (!nav) return;
+
+                // Show/hide chapter-nav based on scroll position
+                const floatingBtns = document.getElementById('floating-para-btns');
+                main.addEventListener('scroll', () => {
+                    if (this._isNearBottom(main)) {
+                        nav.classList.add('visible');
+                        if (floatingBtns) floatingBtns.classList.remove('visible');
+                    } else {
+                        nav.classList.remove('visible');
+                        this._reset();
+                    }
+                }, { passive: true });
+
+                // Magnetic overscroll for next chapter
+                this._ringWrap = document.querySelector('.mag-ring');
+                if (!this._ringWrap) return;
+                this._ring = this._ringWrap.querySelector('.progress');
+                const links = document.querySelectorAll('.chapter-nav .nav-link[href*="/read/"]');
+                const next = Array.from(links).find(a => a.textContent.trim() === 'NEXT');
+                if (!next) return;
+                this._nextHref = next.href;
+
+                main.addEventListener('wheel', (e) => {
+                    if (!this._isAtBottom(main) || e.deltaY <= 0) {
+                        if (e.deltaY < 0) this._reset();
+                        return;
+                    }
+                    e.preventDefault();
+                    this._accum += Math.abs(e.deltaY);
+                    this._ringWrap.classList.add('visible');
+                    const pct = Math.min(1, this._accum / this._threshold);
+                    this._ring.style.strokeDashoffset = 113 * (1 - pct);
+                    clearTimeout(this._timer);
+                    this._timer = setTimeout(() => this._reset(), 800);
+                    if (this._accum >= this._threshold) this._go();
+                }, { passive: false });
+            },
+
+            _isNearBottom(el) {
+                return el.scrollTop + el.clientHeight >= el.scrollHeight - 120;
+            },
+
+            _isAtBottom(el) {
+                return el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
+            },
+
+            _reset() {
+                this._accum = 0;
+                if (this._ring) this._ring.style.strokeDashoffset = '113';
+                if (this._ringWrap) this._ringWrap.classList.remove('visible');
+            },
+
+            _go() {
+                sessionStorage.setItem('sidebar_scroll', document.getElementById('sidebar').scrollTop);
+                window.location.href = this._nextHref;
+            }
+        };
+
+        UX.init(); Audio.init(); Highlights.init(); Progress.init(); ReadingStats.init(); Sel.init(); AI._initFade(); MagneticNav.init();
         AI._restoreChat();
+        AI.restoreTranslations();
 
         // Fix cover SVGs: ensure correct aspect ratio
         document.querySelectorAll('.book-content svg').forEach(svg => {
