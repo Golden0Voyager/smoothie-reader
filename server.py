@@ -650,6 +650,25 @@ async def chat_about_chapter(req: AIChatRequest):
 {req.question}"""
 
     try:
+        if model:
+            def generate_gemini():
+                try:
+                    response = model.generate_content(
+                        prompt,
+                        stream=True,
+                        generation_config=genai.types.GenerationConfig(temperature=0.7),
+                    )
+                    for chunk in response:
+                        try:
+                            if chunk.text:
+                                yield chunk.text
+                        except (ValueError, AttributeError):
+                            continue
+                except Exception as e:
+                    yield f"\n[Error: {str(e)}]"
+
+            return StreamingResponse(generate_gemini(), media_type="text/plain; charset=utf-8")
+
         if _zhipu_client:
             async def generate_zhipu():
                 try:
@@ -659,24 +678,6 @@ async def chat_about_chapter(req: AIChatRequest):
                     yield f"\n[Error: {str(e)}]"
 
             return StreamingResponse(generate_zhipu(), media_type="text/plain; charset=utf-8")
-
-        def generate_gemini():
-            try:
-                response = model.generate_content(
-                    prompt,
-                    stream=True,
-                    generation_config=genai.types.GenerationConfig(temperature=0.7),
-                )
-                for chunk in response:
-                    try:
-                        if chunk.text:
-                            yield chunk.text
-                    except (ValueError, AttributeError):
-                        continue
-            except Exception as e:
-                yield f"\n[Error: {str(e)}]"
-
-        return StreamingResponse(generate_gemini(), media_type="text/plain; charset=utf-8")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
