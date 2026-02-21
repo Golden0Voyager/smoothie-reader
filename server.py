@@ -43,7 +43,7 @@ if ZHIPUAI_API_KEY:
     _zhipu_client = httpx.AsyncClient(
         base_url="https://open.bigmodel.cn/api/paas/v4/",
         headers={"Authorization": f"Bearer {ZHIPUAI_API_KEY}", "Content-Type": "application/json"},
-        timeout=30,
+        timeout=10,
         trust_env=False,
     )
     _zhipu_headers = {"Authorization": f"Bearer {ZHIPUAI_API_KEY}", "Content-Type": "application/json"}
@@ -53,6 +53,10 @@ else:
 
 # Google Translate direct API (fast, connection-pooled)
 _gt_client = httpx.AsyncClient(timeout=5, http2=False)
+
+# Model tags appended to streaming responses for frontend display
+_GEMINI_TAG = "\n<!--model:Gemini 3 Flash-->"
+_ZHIPU_TAG = "\n<!--model:GLM-4.7-Flash-->"
 
 
 async def _zhipu_chat(prompt: str, temperature: float = 0.7, max_tokens: int = 4096) -> str:
@@ -71,7 +75,7 @@ async def _zhipu_chat(prompt: str, temperature: float = 0.7, max_tokens: int = 4
 async def _zhipu_stream(prompt: str, temperature: float = 0.7, max_tokens: int = 4096):
     """Async generator yielding ZhipuAI streaming text chunks. Uses a fresh client to avoid connection pool issues."""
     try:
-        async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+        async with httpx.AsyncClient(timeout=10, trust_env=False) as client:
             async with client.stream("POST", "https://open.bigmodel.cn/api/paas/v4/chat/completions",
                 headers=_zhipu_headers,
                 json={
@@ -83,6 +87,8 @@ async def _zhipu_stream(prompt: str, temperature: float = 0.7, max_tokens: int =
                     "thinking": {"type": "disabled"},
                 },
             ) as resp:
+                if resp.status_code != 200:
+                    raise Exception(f"ZhipuAI HTTP {resp.status_code}")
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):
                         continue
@@ -100,7 +106,7 @@ async def _zhipu_stream(prompt: str, temperature: float = 0.7, max_tokens: int =
         return
     except Exception as e:
         print(f"[ZhipuAI stream error] {e}")
-        return
+        raise
 
 def _detect_cjk_ratio(text):
     cjk = sum(1 for c in text if '\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af')
@@ -415,9 +421,11 @@ async def analyze_chapter(req: AIAnalyzeRequest):
         if model:
             response = await asyncio.to_thread(model.generate_content, prompt)
             text = response.text.strip()
+            used_model = "Gemini 3 Flash"
         elif _zhipu_client:
             text = await _zhipu_chat(prompt, temperature=0.3, max_tokens=8192)
             text = text.strip()
+            used_model = "GLM-4.7-Flash"
         else:
             raise HTTPException(status_code=500, detail="AI not configured")
 
@@ -426,6 +434,7 @@ async def analyze_chapter(req: AIAnalyzeRequest):
             text = text[text.find("{"):text.rfind("}")+1]
 
         result = json.loads(text)
+        result["_model"] = used_model
         _analysis_cache[cache_key] = result # Cache the processed object
         return result
     except Exception as e:
@@ -499,14 +508,33 @@ async def translate_text_stream(req: dict):
 
     # Prefer ZhipuAI (free), fall back to Gemini
     if _zhipu_client:
-        async def generate_zhipu():
+        async def generate_with_fallback():
             try:
                 async for chunk in _zhipu_stream(prompt, temperature=0.1, max_tokens=4096):
                     yield chunk
+                yield _ZHIPU_TAG
+                return
             except Exception as e:
-                yield f"[Translation Error: {str(e)}]"
+                print(f"[translate-stream] ZhipuAI failed ({e}), falling back to Gemini")
+            if model:
+                try:
+                    response = model.generate_content(
+                        prompt, stream=True,
+                        generation_config=genai.types.GenerationConfig(temperature=0.1),
+                    )
+                    for chunk in response:
+                        try:
+                            if chunk.text:
+                                yield chunk.text
+                        except (ValueError, AttributeError):
+                            continue
+                    yield _GEMINI_TAG
+                except Exception as e2:
+                    yield f"[Translation Error: {str(e2)}]"
+            else:
+                yield f"[Translation Error: AI not available]"
 
-        return StreamingResponse(generate_zhipu(), media_type="text/plain; charset=utf-8")
+        return StreamingResponse(generate_with_fallback(), media_type="text/plain; charset=utf-8")
 
     # Gemini fallback
     def generate_gemini():
@@ -524,6 +552,7 @@ async def translate_text_stream(req: dict):
                         yield chunk.text
                 except (ValueError, AttributeError):
                     continue
+            yield _GEMINI_TAG
         except Exception as e:
             yield f"[Translation Error: {str(e)}]"
 
@@ -664,6 +693,7 @@ async def chat_about_chapter(req: AIChatRequest):
                                 yield chunk.text
                         except (ValueError, AttributeError):
                             continue
+                    yield _GEMINI_TAG
                 except Exception as e:
                     yield f"\n[Error: {str(e)}]"
 
@@ -674,6 +704,7 @@ async def chat_about_chapter(req: AIChatRequest):
                 try:
                     async for chunk in _zhipu_stream(prompt, temperature=0.7, max_tokens=4096):
                         yield chunk
+                    yield _ZHIPU_TAG
                 except Exception as e:
                     yield f"\n[Error: {str(e)}]"
 

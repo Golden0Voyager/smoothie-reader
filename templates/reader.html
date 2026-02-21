@@ -26,7 +26,7 @@
         [data-theme="ocean"] { --primary: #0EA5E9; --surface: #F0F7FF; --outline: #BAE6FD; --on-surface: #075985; }
         [data-theme="forest"] { --primary: #10B981; --surface: #F0FDF4; --outline: #BBF7D0; --on-surface: #065F46; }
         [data-theme="sepia"] { --primary: #B45309; --surface: #FEFBE8; --outline: #FEF08A; --on-surface: #78350F; }
-        [data-theme="dark"] { --primary: #BB86FC; --secondary: #94A3B8; --surface: #0F172A; --outline: #1E293B; --on-surface: #F1F5F9; }
+        [data-theme="dark"] { --primary: #BB86FC; --secondary: #94A3B8; --surface: #0F172A; --outline: #2D3748; --on-surface: #F1F5F9; }
         [data-theme="slate"] { --primary: #6366F1; --surface: #F8FAFC; --outline: #C7D2FE; --on-surface: #1E1B4B; }
 
         body.is-dragging { user-select: none; }
@@ -50,6 +50,8 @@
             transition: background 0.4s var(--transition);
         }
         [data-theme="sepia"] #main { background: #FCF6E5; }
+        [data-theme="sepia"] #sidebar { background: rgba(180, 140, 60, 0.06); }
+        [data-theme="sepia"] #panels-container { background: rgba(180, 140, 60, 0.06); }
         [data-theme="dark"] #main { background: #1A1A1C; }
 
         #panels-container { width: var(--panels-width); min-width: 0; background: rgba(0,0,0,0.015); border-left: 1px solid var(--outline); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; transition: width 0.3s var(--transition); position: relative; }
@@ -106,7 +108,7 @@
         .toggle-group:hover .toggle-sub,
         .toggle-group.expanded .toggle-sub {
             opacity: 1; transform: scale(1) translateY(0); pointer-events: auto;
-            max-height: 50px; margin-top: 30px; overflow: visible;
+            max-height: 50px; margin-top: 24px; overflow: visible;
         }
         /* Staggered cascade: top → bottom on enter */
         .toggle-group:hover .toggle-sub:nth-child(2),
@@ -274,9 +276,8 @@
         @keyframes magPulse { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.15; } }
         
         /* Floating para action buttons */
-        #floating-para-btns { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 100; opacity: 0; transform: translateY(-50%) scale(0.9); transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        #floating-para-btns { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 100; opacity: 0; transform: translateY(-50%) scale(0.9); transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.15s ease-out; }
         #floating-para-btns.visible { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
-        #floating-para-btns.relocating { opacity: 0; transform: translateY(-50%) scale(0.9); transition: opacity 0.12s ease-out, transform 0.12s ease-out; }
         #floating-para-btns .p-btn { pointer-events: auto; opacity: 0.6; transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
         #floating-para-btns .p-btn:hover { opacity: 1; }
         .p-btn { background: var(--surface); border: 1px solid var(--outline); width: 24px; height: 24px; border-radius: 7px; font-size: 0.65rem; font-weight: 800; color: var(--primary); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease; overflow: visible; }
@@ -645,7 +646,7 @@
         }
         .toggle-track:active::after { width: 23px; }
         .toggle-switch input:checked + .toggle-track:active::after { transform: translateY(-50%) translateX(16px); width: 23px; }
-        [data-theme="dark"] .toggle-track { background: rgba(120, 120, 128, 0.32); border-color: rgba(255, 255, 255, 0.08); }
+        [data-theme="dark"] .toggle-track { background: rgba(160, 160, 170, 0.35); border-color: rgba(255, 255, 255, 0.12); }
         [data-theme="dark"] .toggle-track::after { background: #E0E0E0; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 
         /* Settings Panel */
@@ -654,10 +655,22 @@
         .theme-flex { display: flex; justify-content: space-between; }
 
         /* Loading animation */
-        .loading-dots { display: inline-block; animation: pulse 1.2s ease-in-out infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .loading-dots { display: inline-flex; align-items: center; gap: 2px; }
+        .loading-dots::after {
+            content: ''; display: inline-block;
+            width: 4px; height: 4px; border-radius: 50%; background: var(--secondary);
+            animation: dotBounce 1.4s ease-in-out infinite;
+            margin-left: 6px;
+            box-shadow: 8px 0 0 -1px var(--secondary), 16px 0 0 -1px var(--secondary);
+        }
+        @keyframes dotBounce {
+            0%, 80%, 100% { transform: translateY(0); box-shadow: 8px 0 0 -1px var(--secondary), 16px 0 0 -1px var(--secondary); }
+            20% { transform: translateY(-4px); }
+            40% { transform: translateY(0); box-shadow: 8px -4px 0 -1px var(--secondary), 16px 0 0 -1px var(--secondary); }
+            60% { transform: translateY(0); box-shadow: 8px 0 0 -1px var(--secondary), 16px -4px 0 -1px var(--secondary); }
+        }
         .stop-btn {
-            display: inline-block; margin-left: 10px; padding: 2px 10px;
+            display: inline-block; margin-left: 30px; padding: 2px 10px;
             font-size: 0.7rem; border: 1px solid var(--secondary); border-radius: 10px;
             background: none; color: var(--secondary); cursor: pointer;
             opacity: 0.6; transition: opacity 0.2s, border-color 0.2s, color 0.2s;
@@ -760,17 +773,17 @@
         .quick-btn:active { transform: translateY(0) scale(0.97); box-shadow: none; }
 
         /* AI brand header */
-        .ai-brand { display: flex; align-items: baseline; gap: 6px; }
+        .ai-brand { display: flex; align-items: baseline; gap: 6px; --glow: #D4A853; }
         .ai-brand #panel-title { font-size: 1rem; font-weight: 800; letter-spacing: 0.1em; color: var(--on-surface); transition: text-shadow 0.3s ease; cursor: pointer; }
         .ai-brand #panel-subtitle { font-size: 0.75rem; font-weight: 600; color: var(--on-surface); opacity: 0.75; margin-left: 4px; letter-spacing: 0.15em; transition: text-shadow 0.3s ease, opacity 0.3s ease, font-weight 0.3s ease; cursor: pointer; }
-        .ai-brand #panel-title:hover { text-shadow: 0 0 12px var(--primary), 0 0 4px var(--primary); }
-        .ai-brand #panel-subtitle:hover { text-shadow: 0 0 8px color-mix(in srgb, var(--primary) 60%, transparent); opacity: 1; font-weight: 660; }
+        .ai-brand #panel-title:hover { text-shadow: 0 0 12px rgba(212, 168, 83, 0.5), 0 0 4px rgba(212, 168, 83, 0.3); }
+        .ai-brand #panel-subtitle:hover { text-shadow: 0 0 8px rgba(212, 168, 83, 0.6); opacity: 1; font-weight: 660; }
 
         /* Empty state */
         .ai-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--secondary); gap: 8px; opacity: 0.66; transition: opacity 0.4s ease; }
         .ai-empty:hover { opacity: 1; }
         .ai-empty-icon { font-size: 2.5rem; position: relative; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .ai-empty-icon::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; background: radial-gradient(circle, var(--primary) 0%, transparent 70%); opacity: 0; transition: opacity 0.4s ease; z-index: -1; }
+        .ai-empty-icon::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; background: radial-gradient(circle, #D4A853 0%, transparent 70%); opacity: 0; transition: opacity 0.4s ease; z-index: -1; }
         .ai-empty:hover .ai-empty-icon { transform: scale(1.1); }
         .ai-empty:hover .ai-empty-icon::after { opacity: 0.35; }
         .ai-empty-text { font-size: 0.8rem; line-height: 1.5; transition: color 0.4s ease; }
@@ -851,11 +864,12 @@
         #stats-bookmark {
             position: absolute; right: 32px; top: 50%; transform: translateY(-50%);
             display: flex; align-items: center; cursor: pointer;
-            opacity: 0.4; transition: opacity 0.3s;
+            opacity: 0.4; transition: opacity 0.3s, transform 0.3s ease;
         }
-        #stats-bookmark:hover { opacity: 0.7; }
-        #stats-bookmark svg { width: 14px; height: 14px; fill: none; stroke: var(--on-surface); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        #stats-bookmark.bookmarked { opacity: 0.8; }
+        #stats-bookmark:hover { opacity: 0.8; transform: translateY(calc(-50% - 6px)); }
+        #stats-bookmark svg { width: 15px; height: 15px; fill: none; stroke: var(--on-surface); stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; transition: stroke 0.3s, transform 0.3s ease; transform: scaleY(1.2); }
+        #stats-bookmark:hover svg { stroke: var(--primary); }
+        #stats-bookmark.bookmarked { opacity: 0.8; transform: translateY(calc(-50% - 6px)); }
         #stats-bookmark.bookmarked svg { fill: var(--primary); stroke: var(--primary); }
 
         /* --- Highlight Colors --- */
@@ -864,7 +878,7 @@
         .hl-blue   { background-color: rgba(96, 165, 250, 0.35); cursor: pointer; border-radius: 2px; }
         .hl-pink   { background-color: rgba(244, 114, 182, 0.35); cursor: pointer; border-radius: 2px; }
         .hl-gray   { background-color: rgba(156, 163, 175, 0.3); cursor: pointer; border-radius: 2px; }
-        [data-theme="dark"] .hl-yellow { background-color: rgba(250, 204, 21, 0.2); }
+        [data-theme="dark"] .hl-yellow { background-color: rgba(250, 204, 21, 0.35); }
         [data-theme="dark"] .hl-green  { background-color: rgba(74, 222, 128, 0.2); }
         [data-theme="dark"] .hl-blue   { background-color: rgba(96, 165, 250, 0.2); }
         [data-theme="dark"] .hl-pink   { background-color: rgba(244, 114, 182, 0.2); }
@@ -1060,7 +1074,8 @@
             .sel-colors { gap: 6px; }
 
             /* Paragraph action buttons */
-            .p-btn { width: 36px; height: 36px; border-radius: 10px; font-size: 0.75rem; }
+            .p-btn { width: 36px; height: 36px; border-radius: 10px; font-size: 0.75rem; position: relative; }
+            .p-btn::before { content: ''; position: absolute; inset: -4px; }
 
             /* Translation inline actions: always visible */
             .trans-actions { opacity: 1; pointer-events: auto; }
@@ -1145,7 +1160,7 @@
             <span id="chapter-indicator" class="nav-link" style="font-variant-numeric: tabular-nums; cursor: pointer;" onclick="ChapterJump.show()">{{ chapter_index + 1 }} / {{ book.spine|length }}</span>
             {% if next_idx is not none %}<a href="/read/{{ book_id }}/{{ next_idx }}" onclick="sessionStorage.setItem('sidebar_scroll', document.getElementById('sidebar').scrollTop)" class="nav-link">NEXT</a>{% endif %}
         </div>
-        <div id="reading-stats"><span id="reading-stats-text" onclick="ReadingStats.cycle()"></span><span id="reading-stats-dot" onclick="ReadingStats.cycle()">&#9679;</span><span id="stats-bookmark"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span></div>
+        <div id="reading-stats"><span id="reading-stats-text" onclick="ReadingStats.cycle()"></span><span id="reading-stats-dot" onclick="ReadingStats.cycle()">&#9679;</span><span id="stats-bookmark"><svg viewBox="0 0 24 24"><path d="M5 3h14v18l-7-5-7 5V3z" vector-effect="non-scaling-stroke"/></svg></span></div>
     </div>
 
     <div id="right-resizer" class="resizer"></div>
@@ -1361,7 +1376,7 @@
             'Sonia · F': 'Sonia · 女', 'Ryan · M': 'Ryan · 男', 'Libby · F': 'Libby · 女', 'Thomas · M': 'Thomas · 男',
             // AI labels & status
             'Difficult Parts': '难点解析',
-            'Analyzing...': '分析中...', 'Thinking...': '思考中...', 'Translating...': '翻译中...',
+            'Analyzing': '分析中', 'Thinking': '思考中', 'Translating': '翻译中',
             'Analysis service temporarily unavailable': '分析服务暂时不可用',
             'Translation service temporarily unavailable': '翻译服务暂时不可用',
             'Translating, please wait...': 'A glimmer of magic, words quietly drifting past the wall of language…\n\n魔法点亮微光，文字正悄然越过语言的墙…… ',
@@ -1508,14 +1523,16 @@
             },
             setupThemes() {
                 const themes = ['', 'ocean', 'forest', 'sepia', 'slate', 'dark'];
+                const themeNames = { '': 'Lavender', ocean: 'Ocean', forest: 'Forest', sepia: 'Sepia', slate: 'Slate', dark: 'Dark' };
                 const grid = document.getElementById('theme-grid');
                 const setActive = (el) => { document.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active')); el.classList.add('active'); };
                 themes.forEach(t => {
                     const dot = document.createElement('div');
                     dot.className = `theme-dot dot-${t || 'lavender'} ${state.theme === t ? 'active' : ''}`;
+                    dot.title = themeNames[t];
                     dot.onclick = () => {
                         state.theme = t;
-                        root.style.removeProperty('--primary'); root.style.removeProperty('--surface'); root.style.removeProperty('--outline'); root.style.removeProperty('--on-surface');
+                        ['--primary','--secondary','--surface','--outline','--on-surface'].forEach(p => root.style.removeProperty(p));
                         if (t) root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
                         localStorage.setItem('reader_theme', t); localStorage.removeItem('reader_custom_color');
                         setActive(dot);
@@ -1525,6 +1542,7 @@
                 // Custom color picker
                 const customDot = document.createElement('div');
                 customDot.className = 'theme-dot dot-custom';
+                customDot.title = 'Custom';
                 const picker = document.createElement('input');
                 picker.type = 'color';
                 picker.value = localStorage.getItem('reader_custom_color') || '#6366F1';
@@ -1686,7 +1704,6 @@
                 contentContainer.appendChild(container);
 
                 // Position floating buttons to hovered paragraph
-                let _relocTimer = null;
                 const positionBtns = (p) => {
                     if (!p) { container.classList.remove('visible'); return; }
                     const isSameP = container._currentP === p;
@@ -1740,20 +1757,11 @@
                     };
 
                     if (isSameP || !container.classList.contains('visible')) {
-                        // First show or same paragraph: just move and fade in
                         moveTo();
-                        container.classList.remove('relocating');
                         container.classList.add('visible');
                     } else {
-                        // Different paragraph: fade out → move → fade in
-                        if (_relocTimer) clearTimeout(_relocTimer);
-                        container.classList.add('relocating');
-                        _relocTimer = setTimeout(() => {
-                            moveTo();
-                            container.classList.remove('relocating');
-                            container.classList.add('visible');
-                            _relocTimer = null;
-                        }, 100);
+                        // Different paragraph: smooth slide via CSS transition on top
+                        moveTo();
                     }
                 };
 
@@ -1875,6 +1883,13 @@
             _abortCtrl: null,
             _loadingHtml(text) {
                 return `<div class="loading-dots">${text}</div><button class="stop-btn" onclick="AI.stopRequest()">${t('Stop')}</button>`;
+            },
+            _extractModel(text) {
+                const m = text.match(/\n?<!--model:(.+?)-->/);
+                return m ? { text: text.replace(m[0], ''), model: m[1] } : { text, model: null };
+            },
+            _modelTag(name) {
+                return name ? `<div style="font-size:0.65rem;color:var(--secondary);opacity:0.6;margin-top:6px;text-align:right">Powered by ${name}</div>` : '';
             },
             stopRequest() {
                 if (this._abortCtrl) {
@@ -2202,7 +2217,7 @@
 
                 const bubble = document.createElement('div');
                 bubble.className = 'chat-bubble ai';
-                bubble.innerHTML = this._loadingHtml(t('Analyzing...'));
+                bubble.innerHTML = this._loadingHtml(t('Analyzing'));
                 this._addIcon(bubble, 'ai');
                 history.appendChild(bubble);
                 this._scrollBottom();
@@ -2214,7 +2229,7 @@
                     const data = await resp.json();
                     if (!data.summary && !data.key_points) throw new Error('Empty analysis');
                     cache.set(cacheKey, data);
-                    bubble.innerHTML = this._formatAnalysis(data);
+                    bubble.innerHTML = this._formatAnalysis(data) + this._modelTag(data._model);
                     this._addIcon(bubble, 'ai');
                     const aMsg = this._saveMsg('ai', bubble.innerHTML);
                     this._addDelBtn(bubble, aMsg.id);
@@ -2245,7 +2260,7 @@
                 const history = document.getElementById('ai-chat-history');
                 const aiBubble = document.createElement('div');
                 aiBubble.className = 'chat-bubble ai';
-                aiBubble.innerHTML = this._loadingHtml(t('Thinking...'));
+                aiBubble.innerHTML = this._loadingHtml(t('Thinking'));
                 this._addIcon(aiBubble, 'ai');
                 history.appendChild(aiBubble);
                 this._scrollBottom();
@@ -2273,6 +2288,8 @@
                         aiBubble.innerHTML = _md(raw);
                         this._scrollBottom();
                     }
+                    const { text: cleanRaw, model: modelName } = this._extractModel(raw);
+                    aiBubble.innerHTML = _md(cleanRaw) + this._modelTag(modelName);
                     const aMsg = this._saveMsg('ai', aiBubble.innerHTML);
                     this._addDelBtn(aiBubble, aMsg.id);
                 } catch (e) {
@@ -2308,7 +2325,7 @@
 
                 const bubble = document.createElement('div');
                 bubble.className = 'chat-bubble ai';
-                bubble.innerHTML = this._loadingHtml(t('Translating...'));
+                bubble.innerHTML = this._loadingHtml(t('Translating'));
                 this._addIcon(bubble, 'ai');
                 history.appendChild(bubble);
                 this._scrollBottom();
@@ -2443,6 +2460,14 @@
                         if (done) break;
                         if (first) { clearTimeout(typeTimer); div.textContent = ''; first = false; }
                         div.textContent += decoder.decode(value, { stream: true });
+                    }
+                    const { text: cleanText, model: modelName } = AI._extractModel(div.textContent);
+                    div.textContent = cleanText;
+                    if (modelName) {
+                        const tag = document.createElement('div');
+                        tag.style.cssText = 'font-size:0.65rem;color:var(--secondary);opacity:0.6;margin-top:4px;text-align:right';
+                        tag.textContent = 'Powered by ' + modelName;
+                        div.appendChild(tag);
                     }
                     this._addTransClose(div, pEl);
                     this._saveTranslations();
@@ -3610,9 +3635,17 @@
                 let top = rect.top - tbHeight - 15;
                 let left = rect.left + (rect.width / 2) - (tbWidth / 2);
 
+                // Visible viewport height (accounts for software keyboard on mobile)
+                const vpHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
                 // If not enough space above, show below
                 if (top < 8) {
                     top = rect.bottom + 8;
+                }
+                // If toolbar would be hidden behind keyboard, push it up
+                if (top + tbHeight > vpHeight - 8) {
+                    top = rect.top - tbHeight - 15;
+                    if (top < 8) top = 8;
                 }
                 // Keep within viewport
                 left = Math.max(8, Math.min(left, window.innerWidth - tbWidth - 8));
@@ -3740,7 +3773,7 @@
             },
             async _doTranslate(text) {
                 const contentEl = document.getElementById('lookup-content');
-                contentEl.innerHTML = '<div class="lookup-loading">' + t('Translating...') + '</div>';
+                contentEl.innerHTML = '<div class="lookup-loading">' + t('Translating') + '</div>';
                 this._showLookup();
                 try {
                     const resp = await fetch('/api/quick-translate', {
