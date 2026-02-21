@@ -87,7 +87,7 @@
         .toggle-group {
             position: fixed; top: 24px; left: calc(var(--sidebar-width) + 24px);
             z-index: 2000; display: flex; flex-direction: column; align-items: center; gap: 0;
-            transition: left 0.3s var(--transition);
+            transition: left 0.3s var(--transition), opacity 0.3s ease;
         }
         #sidebar.collapsed ~ .toggle-group { left: 24px; }
         .toggle-group .toggle-btn { position: static; }
@@ -119,6 +119,8 @@
         .toggle-group .toggle-sub:nth-child(2) { transition-delay: 0.06s; }
         .toggle-group .toggle-sub:nth-child(3) { transition-delay: 0.03s; }
         .toggle-group .toggle-sub:nth-child(4) { transition-delay: 0s; }
+        /* Auto-hide toggles on scroll */
+        .toggle-group.auto-hidden, #toggle-right.auto-hidden { opacity: 0; pointer-events: none; }
 
         /* BOTTOM: Audio Console (inline in AI panel) */
         #audio-console {
@@ -222,7 +224,7 @@
         .progress-fill { height: 100%; background: var(--primary); width: 0%; border-radius: 1px; transition: width 0.1s linear; }
 
         .rotated { transform: rotate(180deg); }
-        #toggle-right { transition: transform 0.3s ease; }
+        #toggle-right { transition: transform 0.3s ease, opacity 0.3s ease; }
         #toggle-right:hover { transform: translateY(-1px) rotate(180deg); }
         #toggle-right.rotated:hover { transform: translateY(-1px) rotate(0deg); }
 
@@ -823,7 +825,7 @@
             transition: opacity 0.3s;
         }
         #reading-stats-text {
-            font-family: "Georgia", "Palatino Linotype", "Book Antiqua", serif;
+            font-family: -apple-system, Inter, system-ui, sans-serif;
             font-size: 0.75rem; font-weight: 400; color: var(--on-surface);
             font-variant-numeric: tabular-nums; letter-spacing: 0.03em;
             opacity: 0.8; transition: opacity 0.3s ease;
@@ -834,7 +836,7 @@
         #reading-stats.hidden #reading-stats-dot { display: inline; }
         #reading-stats.hidden:hover #reading-stats-dot { opacity: 0.6; }
         #stats-bookmark {
-            position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+            position: absolute; right: 32px; top: 50%; transform: translateY(-50%);
             display: flex; align-items: center; cursor: pointer;
             opacity: 0.4; transition: opacity 0.3s;
         }
@@ -1018,6 +1020,7 @@
             #toggle-right { right: 12px !important; top: 12px; }
             #panels-container.collapsed ~ #toggle-right { right: 12px; }
             .toggle-btn { width: 40px; height: 40px; border-radius: 14px; }
+            #stats-bookmark { right: 25px; }
 
             /* Settings / Search / Notebook panels: centered */
             #settings-panel, #search-panel, #notebook-panel {
@@ -1129,7 +1132,7 @@
             <span id="chapter-indicator" class="nav-link" style="font-variant-numeric: tabular-nums; cursor: pointer;" onclick="ChapterJump.show()">{{ chapter_index + 1 }} / {{ book.spine|length }}</span>
             {% if next_idx is not none %}<a href="/read/{{ book_id }}/{{ next_idx }}" onclick="sessionStorage.setItem('sidebar_scroll', document.getElementById('sidebar').scrollTop)" class="nav-link">NEXT</a>{% endif %}
         </div>
-        <div id="reading-stats"><span id="reading-stats-text" onclick="ReadingStats.cycle()"></span><span id="reading-stats-dot" onclick="ReadingStats.cycle()">&#9679;</span><span id="stats-bookmark" onclick="event.stopPropagation();Bookmarks.toggleAtCenter()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span></div>
+        <div id="reading-stats"><span id="reading-stats-text" onclick="ReadingStats.cycle()"></span><span id="reading-stats-dot" onclick="ReadingStats.cycle()">&#9679;</span><span id="stats-bookmark"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span></div>
     </div>
 
     <div id="right-resizer" class="resizer"></div>
@@ -2865,17 +2868,17 @@
                     case 1: { // Chapter remaining time
                         const remaining = this._chapterChars * (1 - ratio);
                         const mins = Math.max(1, Math.ceil(remaining / this._cpm));
-                        return isZh ? `${mins} 分钟读完本章` : `${mins} min left in chapter`;
+                        return isZh ? `剩余${mins}分钟读完本章` : `${mins} min left in chapter`;
                     }
                     case 2: { // Book remaining time
                         const chapterDone = ratio;
                         const avgChars = this._chapterChars;
                         const remainChapters = (total - 1 - chIdx) + (1 - chapterDone);
                         const remainMins = Math.max(1, Math.ceil(remainChapters * avgChars / this._cpm));
-                        if (remainMins < 60) return isZh ? `${remainMins} 分钟读完全书` : `${remainMins} min left in book`;
+                        if (remainMins < 60) return isZh ? `全书剩余${remainMins}分钟` : `${remainMins} min left in book`;
                         const h = Math.floor(remainMins / 60);
                         const m = remainMins % 60;
-                        if (isZh) return m > 0 ? `${h}小时${m}分钟` : `${h}小时`;
+                        if (isZh) return m > 0 ? `全书剩余${h}小时${m}分钟` : `全书剩余${h}小时`;
                         return m > 0 ? `${h} hr ${m} min left` : `${h} hr left`;
                     }
                     case 3: { // Book percentage
@@ -4243,6 +4246,42 @@
             _bmScrollTimer = setTimeout(() => Bookmarks._updateBtnState(), 150);
         }, { passive: true });
         Bookmarks._updateBtnState();
+
+        // Auto-hide toggle buttons on scroll direction
+        (() => {
+            const tg = document.querySelector('.toggle-group');
+            const tr = document.getElementById('toggle-right');
+            let lastY = _scrollContainer.scrollTop;
+            const hide = () => { tg.classList.add('auto-hidden'); tr.classList.add('auto-hidden'); };
+            const show = () => { tg.classList.remove('auto-hidden'); tr.classList.remove('auto-hidden'); };
+            const panelOpen = () => ['settings-panel','search-panel','notebook-panel'].some(id => document.getElementById(id).style.display === 'block');
+            _scrollContainer.addEventListener('scroll', () => {
+                const y = _scrollContainer.scrollTop;
+                const delta = y - lastY;
+                lastY = y;
+                if (y < 50 || panelOpen() || tg.classList.contains('expanded')) { show(); return; }
+                if (delta > 5) hide();
+                else if (delta < -5) show();
+            }, { passive: true });
+        })();
+
+        // Stats bookmark: short tap = toggle, long press = open bookmark panel
+        (() => {
+            const btn = document.getElementById('stats-bookmark');
+            if (!btn) return;
+            let _lpTimer = null, _didLong = false;
+            const startPress = (e) => { e.stopPropagation(); _didLong = false; _lpTimer = setTimeout(() => { _didLong = true; toggleNotebook(); Bookmarks._switchTab('bookmarks'); Bookmarks.renderList(); }, 450); };
+            const endPress = (e) => { e.stopPropagation(); clearTimeout(_lpTimer); if (!_didLong) Bookmarks.toggleAtCenter(); };
+            const cancelPress = () => { clearTimeout(_lpTimer); };
+            btn.addEventListener('mousedown', startPress);
+            btn.addEventListener('mouseup', endPress);
+            btn.addEventListener('mouseleave', cancelPress);
+            btn.addEventListener('click', (e) => { e.stopPropagation(); if (_didLong) e.preventDefault(); });
+            btn.addEventListener('touchstart', startPress, { passive: false });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); endPress(e); });
+            btn.addEventListener('touchcancel', cancelPress);
+        })();
+
         AI._restoreChat();
         AI.restoreTranslations();
 
