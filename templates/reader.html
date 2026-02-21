@@ -87,7 +87,7 @@
         .toggle-group {
             position: fixed; top: 24px; left: calc(var(--sidebar-width) + 24px);
             z-index: 2000; display: flex; flex-direction: column; align-items: center; gap: 0;
-            transition: left 0.3s var(--transition), opacity 0.3s ease;
+            transition: left 0.3s var(--transition), opacity 0.3s ease, transform 0.3s ease;
         }
         #sidebar.collapsed ~ .toggle-group { left: 24px; }
         .toggle-group .toggle-btn { position: static; }
@@ -120,7 +120,8 @@
         .toggle-group .toggle-sub:nth-child(3) { transition-delay: 0.03s; }
         .toggle-group .toggle-sub:nth-child(4) { transition-delay: 0s; }
         /* Auto-hide toggles on scroll */
-        .toggle-group.auto-hidden, #toggle-right.auto-hidden { opacity: 0; pointer-events: none; }
+        .toggle-group.auto-hidden, #toggle-right.auto-hidden { opacity: 0; transform: translateY(-20px); pointer-events: none; }
+        #toggle-right.rotated.auto-hidden { transform: translateY(-20px) rotate(180deg); }
 
         /* BOTTOM: Audio Console (inline in AI panel) */
         #audio-console {
