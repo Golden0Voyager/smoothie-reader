@@ -315,9 +315,13 @@
 
         /* --- 5. Settings Card --- */
         #settings-panel {
-            position: fixed; top: 80px; width: 330px; background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px);
-            border: 1px solid var(--outline); border-radius: 20px; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.15); z-index: 3000; display: none; transition: left 0.3s var(--transition);
+            position: fixed; top: 80px; width: 330px; max-height: calc(100vh - 120px); overflow-y: auto;
+            background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px);
+            border: 1px solid var(--outline); border-radius: 20px; padding: 18px; box-shadow: 0 25px 60px rgba(0,0,0,0.15); z-index: 3000; display: none; transition: left 0.3s var(--transition);
+            scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent;
         }
+        #settings-panel::-webkit-scrollbar { width: 3px; }
+        #settings-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
         #sidebar.collapsed ~ #settings-panel { left: 70px; }
         #sidebar:not(.collapsed) ~ #settings-panel { left: calc(var(--sidebar-width) + 70px); }
 
@@ -650,9 +654,158 @@
         [data-theme="dark"] .toggle-track::after { background: #E0E0E0; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 
         /* Settings Panel */
-        .setting-section { margin-bottom: 28px; }
-        .setting-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--secondary); margin-bottom: 10px; line-height: 1.2; min-height: 1em; }
+        .setting-section { margin-bottom: 18px; }
+        .setting-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--secondary); margin-bottom: 9px; line-height: 1.2; min-height: 1em; }
         .theme-flex { display: flex; justify-content: space-between; }
+
+        /* Dictionary management */
+        .dict-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:0.78rem; }
+        .dict-label { color:var(--secondary); }
+        .dict-status { margin-left:auto; font-size:0.7rem; color:var(--secondary); white-space:nowrap; }
+        .dict-dl-btn { font-size:0.68rem; padding:3px 10px; border:1px solid var(--outline); border-radius:6px; background:transparent; color:var(--fg); cursor:pointer; margin-left:auto; }
+        .dict-dl-btn:hover { background:var(--outline); }
+        .dict-dl-btn:disabled { opacity:0.4; cursor:default; }
+        .dict-progress { width:100px; height:4px; border-radius:2px; background:var(--outline); margin-left:auto; overflow:hidden; }
+        .dict-progress-bar { height:100%; border-radius:2px; background:var(--accent, #007aff); transition:width 0.3s; }
+
+        /* Konami hint */
+        .konami-hint { text-align: center; font-size: 0.6rem; color: var(--secondary); opacity: 0.06; transition: opacity 0.5s; cursor: default; user-select: none; margin-top: -6px; letter-spacing: 0.5px; }
+        .konami-hint:hover { opacity: 0.3; }
+        .konami-toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: #fff; padding: 12px 24px; border-radius: 12px; font-size: 0.85rem; z-index: 9999; pointer-events: none; animation: toastFade 2.5s ease forwards; letter-spacing: 1px; }
+        @keyframes toastFade { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); } 15% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+        /* AI Provider Section — hidden by default, revealed by Konami Code */
+        .ai-providers-section { border-top: 1px solid var(--outline); padding-top: 24px; margin-top: 4px; margin-bottom: 12px; display: none; }
+        .ai-providers-section.unlocked { display: block; }
+        .ai-sub-section { border-top: none; padding-top: 0; margin-top: 0; margin-bottom: 12px; }
+        .ai-providers-section.unlocked ~ .ai-sub-section { display: block; }
+        .ai-section-header { cursor: pointer; user-select: none; }
+        @keyframes aiUnlock { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
+        .ai-section-row1 { display: flex; align-items: center; gap: 6px; }
+        .ai-section-row1 .setting-label { margin-bottom: 0; flex-shrink: 0; }
+        .ai-section-chevron { font-size: 0.55rem; color: var(--secondary); transition: transform 0.25s ease; flex-shrink: 0; }
+        .ai-providers-section.expanded .ai-section-chevron { transform: rotate(90deg); }
+        .ai-section-summary { font-size: 0.65rem; color: var(--secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+        .ai-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .ai-status-dot.green { background: #34c759; box-shadow: 0 0 6px #34c759aa; }
+        .ai-status-dot.yellow { background: #ffcc00; box-shadow: 0 0 6px #ffcc00aa; }
+        .ai-status-dot.red { background: #ff3b30; box-shadow: 0 0 6px #ff3b30aa; }
+        .ai-section-menu-btn { background: none; border: 1px solid var(--outline); border-radius: 6px; color: var(--secondary); cursor: pointer; font-size: 0.7rem; font-weight: 600; padding: 3px 10px; line-height: 1.3; font-family: inherit; }
+        .ai-section-menu-btn:hover { background: var(--outline); color: var(--on-surface); }
+        .ai-sub-section .setting-label { margin-bottom: 0; flex-shrink: 0; }
+        .ai-section-body { margin-top: 14px; max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease; }
+        .ai-providers-section.expanded .ai-section-body { max-height: 5000px; opacity: 1; }
+        .ai-provider-card {
+            background: color-mix(in srgb, var(--outline) 30%, transparent); border-radius: 12px;
+            padding: 12px; margin-bottom: 10px; position: relative;
+            transition: background 0.2s, box-shadow 0.2s; border: 1.5px solid transparent;
+        }
+        .ai-provider-card:hover { background: color-mix(in srgb, var(--outline) 50%, transparent); }
+        .ai-provider-card.apc-primary { border-color: color-mix(in srgb, var(--primary) 40%, transparent); }
+        .ai-provider-card .apc-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+        .ai-provider-card .apc-rank {
+            min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; font-size: 0.6rem; font-weight: 800;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            background: var(--outline); color: var(--secondary); transition: all 0.2s; box-sizing: border-box;
+        }
+        .ai-provider-card.apc-primary .apc-rank { background: var(--primary); color: white; }
+        .ai-provider-card .apc-drag {
+            cursor: grab; color: var(--secondary); padding: 0 4px; user-select: none;
+            flex-shrink: 0; transition: color 0.15s; font-size: 0.75rem; line-height: 1;
+        }
+        .ai-provider-card .apc-drag:hover { color: var(--primary); }
+        .ai-provider-card .apc-drag:active { cursor: grabbing; }
+        .ai-provider-card.dragging { opacity: 0.35; }
+        .ai-provider-card.drag-before::before, .ai-provider-card.drag-after::after {
+            content: ''; position: absolute; left: 8px; right: 8px; height: 2px;
+            background: var(--primary); border-radius: 1px;
+            box-shadow: 0 0 4px color-mix(in srgb, var(--primary) 50%, transparent);
+        }
+        .ai-provider-card.drag-before::before { top: -6px; }
+        .ai-provider-card.drag-after::after { bottom: -6px; }
+        .ai-provider-card .apc-header select {
+            flex: 1; padding: 4px 8px; border: 1px solid var(--outline); border-radius: 8px;
+            font-size: 0.75rem; background: var(--surface); color: var(--on-surface); outline: none; font-family: inherit;
+        }
+        .ai-provider-card .apc-header select:focus { border-color: var(--primary); }
+        .ai-provider-card .apc-del {
+            width: 22px; height: 22px; border: none; background: none; color: var(--secondary);
+            cursor: pointer; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem; transition: color 0.2s, background 0.2s; flex-shrink: 0;
+        }
+        .ai-provider-card .apc-del:hover { color: #EF4444; background: rgba(239,68,68,0.08); }
+        .ai-provider-card .apc-key-row { display: flex; gap: 6px; margin-bottom: 8px; }
+        .ai-provider-card .apc-custom-row { display: flex; gap: 6px; margin-bottom: 8px; }
+        .ai-provider-card .apc-custom-row input { flex: 1; padding: 6px 8px; border: 1px solid var(--outline); border-radius: 6px; font-size: 13px; background: var(--bg); color: var(--fg); }
+        .ai-provider-card .apc-custom-row input:focus { border-color: var(--primary); outline: none; }
+        .ai-provider-card .apc-key-input {
+            flex: 1; padding: 5px 8px; border: 1px solid var(--outline); border-radius: 8px;
+            font-size: 0.72rem; font-family: 'SF Mono', 'Menlo', monospace; background: var(--surface); color: var(--on-surface); outline: none;
+        }
+        .ai-provider-card .apc-key-input:focus { border-color: var(--primary); }
+        .ai-provider-card .apc-key-toggle {
+            width: 28px; height: 28px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface);
+            color: var(--secondary); cursor: pointer; flex-shrink: 0; transition: color 0.2s;
+            display: flex; align-items: center; justify-content: center; padding: 0;
+        }
+        .ai-provider-card .apc-key-toggle svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .ai-provider-card .apc-key-toggle:hover { color: var(--primary); }
+        .ai-provider-card .apc-model-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+        .ai-provider-card .apc-model-row select, .ai-provider-card .apc-model-row input, .ai-provider-card .apc-model-select {
+            flex: 1; padding: 4px 8px; border: 1px solid var(--outline); border-radius: 8px;
+            font-size: 0.72rem; background: var(--surface); color: var(--on-surface); outline: none; font-family: inherit; min-width: 0;
+        }
+        .ai-provider-card .apc-model-row select:focus, .ai-provider-card .apc-model-row input:focus { border-color: var(--primary); }
+        .ai-provider-card .apc-fetch-btn, .ai-provider-card .apc-test-btn {
+            padding: 3px 8px; border: 1px solid var(--outline); border-radius: 8px;
+            font-size: 0.65rem; background: var(--surface); color: var(--secondary); cursor: pointer;
+            transition: color 0.2s, border-color 0.2s; flex-shrink: 0; font-family: inherit; white-space: nowrap;
+        }
+        .ai-provider-card .apc-fetch-btn:hover, .ai-provider-card .apc-test-btn:hover { color: var(--primary); border-color: var(--primary); }
+        .ai-provider-card .apc-bottom { display: flex; align-items: center; gap: 8px; }
+        .ai-provider-card .apc-status { font-size: 0.65rem; color: var(--secondary); flex: 1; min-width: 0; word-break: break-all; cursor: pointer; }
+        .ai-provider-card .apc-status:empty { cursor: default; }
+        .ai-provider-card .apc-status.ok { color: #10B981; }
+        .ai-provider-card .apc-status.fail { color: #EF4444; }
+        .ai-provider-card .apc-advanced-toggle {
+            font-size: 0.65rem; color: var(--secondary); cursor: pointer; border: none; background: none;
+            padding: 2px 0; transition: color 0.2s; font-family: inherit; flex-shrink: 0; white-space: nowrap;
+        }
+        .ai-provider-card .apc-advanced-toggle:hover { color: var(--primary); }
+        .ai-provider-card .apc-advanced { display: none; margin-top: 8px; }
+        .ai-provider-card .apc-advanced.show { display: flex; flex-direction: column; gap: 8px; }
+        .ai-provider-card .apc-adv-row { display: flex; align-items: center; gap: 8px; }
+        .ai-provider-card .apc-adv-row label { font-size: 0.65rem; color: var(--secondary); white-space: nowrap; min-width: 70px; }
+        .ai-provider-card .apc-adv-row input {
+            flex: 1; padding: 4px 8px; border: 1px solid var(--outline); border-radius: 8px;
+            font-size: 0.7rem; background: var(--surface); color: var(--on-surface); outline: none; min-width: 0;
+        }
+        .ai-provider-card .apc-adv-row input:focus { border-color: var(--primary); }
+        .ai-provider-card .apc-adv-row input[type="url"] { font-family: 'SF Mono', 'Menlo', monospace; }
+        .ai-add-btn {
+            width: 100%; padding: 7px; border: 1.5px dashed var(--outline); border-radius: 10px;
+            background: none; color: var(--secondary); cursor: pointer; font-size: 0.72rem;
+            transition: color 0.2s, border-color 0.2s; font-family: inherit;
+        }
+        .ai-add-btn:hover { color: var(--primary); border-color: var(--primary); }
+        .ai-task-header { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+        .ai-sub-section .ai-task-header .ai-section-chevron { transition: transform 0.25s ease; }
+        .ai-sub-section.expanded .ai-task-header .ai-section-chevron { transform: rotate(90deg); }
+        .ai-task-body { max-height: 0; overflow: hidden; opacity: 0; padding-top: 14px; transition: max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease; }
+        .ai-sub-section.expanded .ai-task-body { max-height: 500px; opacity: 1; }
+        .ai-config-btns { display: flex; gap: 8px; }
+        .ai-config-btns .ai-section-menu-btn { display: flex; align-items: center; gap: 4px; }
+        .ai-config-btns .ai-section-menu-btn svg { vertical-align: middle; }
+        .ai-task-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .ai-task-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--secondary); display: flex; }
+        .ai-task-icon svg { width: 16px; height: 16px; }
+        .ai-task-row label { font-size: 0.7rem; color: var(--secondary); min-width: 64px; white-space: nowrap; }
+        .ai-task-row select {
+            flex: 1; min-width: 0; padding: 4px 24px 4px 8px; border: 1px solid var(--outline); border-radius: 8px;
+            font-size: 0.7rem; background: var(--surface); color: var(--on-surface); outline: none; font-family: inherit;
+            text-overflow: ellipsis;
+        }
+        .ai-task-row select:focus { border-color: var(--primary); }
 
         /* Loading animation */
         .loading-dots { display: inline-flex; align-items: center; gap: 2px; }
@@ -1234,15 +1387,25 @@
     </div>
 
     <!-- Settings Card -->
+    <!-- 🎮 Hint: ↑↑↓↓←→←→BA -->
     <div id="settings-panel">
         <div id="lang-toggle" onclick="UX.toggleLanguage()"><span class="lang-inner"><span class="lang-current">EN</span><span class="lang-target">中</span></span></div>
-        <div class="setting-section" style="margin-top: 45px"><div class="setting-label" data-i18n="Theme">Theme</div><div id="theme-grid" class="theme-flex"></div></div>
+        <div class="setting-section" style="margin-top: 36px"><div class="setting-label" data-i18n="Theme">Theme</div><div id="theme-grid" class="theme-flex"></div></div>
         <div class="setting-section"><div class="setting-label" data-i18n="Font Size">Font Size</div><input type="range" class="slider" min="0.8" max="2.2" step="0.05" value="1.25" oninput="UX.updateTypography('font-size', this.value + 'rem')"></div>
         <div class="setting-section"><div class="setting-label" data-i18n="Line Spacing">Line Spacing</div><div class="segment-ctrl" id="segment-ctrl"><div class="segment-slider" id="segment-slider"></div><button class="segment-btn" data-i18n="Tight" onclick="UX.updateTypography('line-height', 1.5, this)">Tight</button><button class="segment-btn active" data-i18n="Normal" onclick="UX.updateTypography('line-height', 1.85, this)">Normal</button><button class="segment-btn" data-i18n="Relaxed" onclick="UX.updateTypography('line-height', 2.3, this)">Relaxed</button></div></div>
         <div class="setting-section"><div class="setting-label" data-i18n="Reading Width">Reading Width</div><input type="range" class="slider" min="500" max="1100" step="20" value="760" oninput="UX.updateTypography('content-max-width', this.value + 'px')"></div>
         <div class="setting-section"><div class="setting-label" data-i18n="Text Align">Text Align</div><div class="segment-ctrl" id="align-ctrl"><div class="segment-slider" id="align-slider"></div><button class="segment-btn" data-i18n="Left Align" onclick="UX.setTextAlign('left', this)">Left Align</button><button class="segment-btn" data-i18n="Justify" onclick="UX.setTextAlign('justify', this)">Justify</button></div></div>
         <div class="setting-section" style="margin-bottom:12px"><label class="setting-toggle"><div class="setting-label" style="margin-bottom:0" data-i18n="Read Aloud">Read Aloud</div><div class="toggle-switch"><input type="checkbox" id="toggle-tts" onchange="UX.toggleTTS(this.checked)"><span class="toggle-track"></span></div><span class="setting-tip" data-i18n-tip="Enable text-to-speech and show controls|beside each paragraph">Enable text-to-speech and show controls<br>beside each paragraph</span></label></div>
         <div class="setting-section"><label class="setting-toggle"><div class="setting-label" style="margin-bottom:0" data-i18n="Inline Translation">Inline Translation</div><div class="toggle-switch"><input type="checkbox" id="toggle-inline-translate" onchange="UX.toggleInlineTranslate(this.checked)"><span class="toggle-track"></span></div><span class="setting-tip" data-i18n-tip="Enable inline translation and show controls|beside each paragraph">Enable inline translation and show controls<br>beside each paragraph</span></label></div>
+        <div class="setting-section" id="dict-section">
+          <div class="setting-label" style="margin-bottom:12px" data-i18n="Dict Management">Dict Management</div>
+          <div id="dict-status-list"></div>
+        </div>
+        <div class="konami-hint">🎮 ↑↑↓↓←→←→BA</div>
+        <div class="setting-section ai-providers-section" id="ai-providers-section"><div class="ai-section-header" onclick="UX.toggleAISection()"><div class="ai-section-row1"><div class="setting-label" data-i18n="AI Models">AI Models</div><span class="ai-section-chevron">▶</span><span class="ai-section-summary" id="ai-section-summary"></span></div></div><div class="ai-section-body"><div id="ai-providers-list"></div><button class="ai-add-btn" onclick="UX.addProvider()" data-i18n="+ Add Provider">+ Add Provider</button></div></div>
+        <div class="setting-section ai-providers-section ai-sub-section" id="ai-task-routing-section"><div class="ai-task-header" onclick="UX.toggleTaskRouting()"><div class="setting-label" data-i18n="Task Routing">Task Routing</div><span class="ai-section-chevron">▶</span></div><div class="ai-task-body"><div id="ai-task-routing"></div></div></div>
+        <div class="setting-section ai-providers-section ai-sub-section" id="ai-config-section"><div class="ai-task-header" onclick="UX.toggleConfigSection()"><div class="setting-label" data-i18n="Config Management">Config Management</div><span class="ai-section-chevron">▶</span></div><div class="ai-task-body"><div class="ai-config-btns"><button type="button" class="ai-section-menu-btn" onclick="UX.exportConfig()" data-i18n="Export"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export</button><button type="button" class="ai-section-menu-btn" onclick="document.getElementById('ai-import-file').click()" data-i18n="Import"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import</button></div></div></div>
+        <input type="file" id="ai-import-file" accept=".json" style="display:none" onchange="UX.importConfig(this)">
     </div>
 
     <!-- Notebook Panel -->
@@ -1345,6 +1508,14 @@
             'Theme': '主题', 'Font Size': '字号', 'Line Spacing': '行距',
             'Tight': '紧凑', 'Normal': '标准', 'Relaxed': '宽松',
             'Reading Width': '阅读宽度', 'Text Align': '文本对齐', 'Left Align': '左对齐', 'Justify': '两端对齐', 'Read Aloud': '朗读', 'Inline Translation': '段落翻译',
+            'Dict Management': '词典管理', 'Installed': '已安装', 'Download': '下载', 'Downloading': '下载中', 'No download URL': '未配置下载源',
+            'dict_hint': '安装离线词典可获得更快更准的查词体验', 'Go to Settings': '前往设置',
+            'Dict installed': '词典安装完成，查词更快更准了',
+            'AI Providers': 'AI 供应商', 'AI Models': '模型设置', '+ Add Provider': '+ 添加供应商', 'Select provider': '选择供应商',
+            'Task Routing': '场景路由', 'Config Management': '配置管理', 'Export': '导出', 'Import': '导入',
+            'Translate': '翻译', 'Analyze': '分析', 'Chat': '聊天', 'Dictionary': '词典', 'Auto (by priority)': '按优先级自动',
+            'rt_Translate': '翻译', 'rt_Analyze': '分析', 'rt_Chat': '聊天', 'rt_Dictionary': '词典',
+            'Test': '测试', 'Fetch': '获取', 'Advanced': '高级', 'Custom Base URL': '自定义 Base URL', 'Manual input': '手动输入',
             // Setting tips
             'Enable text-to-speech and show controls': '开启语音朗读并在段落旁显示控件',
             'beside each paragraph': '点击即可收听',
@@ -1481,7 +1652,12 @@
         const UX = {
             init() {
                 this.loadSettings(); this.setupThemes(); this.setupResizers(); this.setupParaActions();
-                this._initSegmentSlider();
+                this._initSegmentSlider(); this.loadProviders(); this._loadDictStatus();
+                const aiSec = document.getElementById('ai-providers-section');
+                if (localStorage.getItem('ai-section-unlocked')) { aiSec?.classList.add('unlocked'); const h = document.querySelector('.konami-hint'); if (h) h.style.display = 'none'; }
+                if (localStorage.getItem('ai-section-expanded')) { aiSec?.classList.add('expanded'); }
+                if (localStorage.getItem('ai-task-routing-expanded')) { document.getElementById('ai-task-routing-section')?.classList.add('expanded'); }
+                if (localStorage.getItem('ai-config-expanded')) { document.getElementById('ai-config-section')?.classList.add('expanded'); }
             },
             loadSettings() {
                 ['font-size', 'line-height', 'content-max-width'].forEach(p => {
@@ -1752,7 +1928,7 @@
                             container.classList.remove('visible');
                             return;
                         }
-                        container.style.left = (pRect.left - containerRect.left - 45) + 'px';
+                        container.style.left = (pRect.left - containerRect.left - 39) + 'px';
                         container.style.top = midY + 'px';
                     };
 
@@ -1841,7 +2017,14 @@
                     ps.style.fontFamily = '';
                 }
                 document.querySelectorAll('[data-i18n]').forEach(el => {
-                    el.textContent = t(el.dataset.i18n);
+                    const val = t(el.dataset.i18n);
+                    if (el.querySelector('svg')) {
+                        // Preserve SVG, only update text node
+                        const textNodes = [...el.childNodes].filter(n => n.nodeType === 3);
+                        if (textNodes.length) textNodes[textNodes.length - 1].textContent = ' ' + val;
+                    } else {
+                        el.textContent = val;
+                    }
                 });
                 document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
                     const keys = el.dataset.i18nPlaceholder.split('\\n');
@@ -1859,6 +2042,10 @@
                 if (story) { story.remove(); AI.showStory(); }
                 // Update reading stats
                 ReadingStats.update(ReadingStats._lastRatio);
+                // Re-render dynamic AI sections
+                this._renderTaskRouting();
+                this._updateAISummary();
+                this._loadDictStatus();
             },
             toggleTTS(on) {
                 localStorage.setItem('reader_tts', on);
@@ -1867,7 +2054,548 @@
             toggleInlineTranslate(on) {
                 localStorage.setItem('reader_inline_translate', on);
                 document.getElementById('readable-content').classList.toggle('hide-inline-translate', !on);
-            }
+            },
+            // --- Dictionary Management ---
+            _dictStatus: null,
+            _dictDownloading: new Set(),
+            async _loadDictStatus() {
+                try {
+                    const resp = await fetch('/api/dict/status');
+                    const data = await resp.json();
+                    this._dictStatus = data;
+                    const container = document.getElementById('dict-status-list');
+                    if (!container) return;
+                    const isZh = state.language === 'zh';
+                    let html = '';
+                    for (const [id, info] of Object.entries(data.dicts)) {
+                        const label = isZh ? info.label : info.label_en;
+                        if (this._dictDownloading.has(id)) {
+                            // preserve progress bar for active downloads
+                            const existing = document.getElementById('dict-row-' + id);
+                            if (existing) { html += existing.outerHTML; continue; }
+                        }
+                        if (info.installed) {
+                            html += `<div class="dict-row"><span class="dict-label">\u{1F4D7} ${label}</span><span class="dict-status">${t('Installed')} (${info.size_mb}MB)</span></div>`;
+                        } else {
+                            const btnLabel = data.has_url ? `${t('Download')} ${info.gz_mb}MB` : t('No download URL');
+                            html += `<div class="dict-row" id="dict-row-${id}"><span class="dict-label">\u{1F4D5} ${label}</span><button class="dict-dl-btn" onclick="UX._downloadDict('${id}')" ${data.has_url ? '' : 'disabled'}>${btnLabel}</button></div>`;
+                        }
+                    }
+                    container.innerHTML = html;
+                } catch (e) { /* ignore */ }
+            },
+            async _downloadDict(id) {
+                const row = document.getElementById('dict-row-' + id);
+                if (!row || this._dictDownloading.has(id)) return;
+                this._dictDownloading.add(id);
+                const btn = row.querySelector('.dict-dl-btn');
+                if (btn) btn.outerHTML = `<div class="dict-progress"><div class="dict-progress-bar" id="dict-bar-${id}" style="width:0%"></div></div>`;
+                try {
+                    const resp = await fetch('/api/dict/download', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id})
+                    });
+                    const reader = resp.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buf = '';
+                    while (true) {
+                        const {done, value} = await reader.read();
+                        if (done) break;
+                        buf += decoder.decode(value, {stream: true});
+                        const lines = buf.split('\n');
+                        buf = lines.pop();
+                        for (const line of lines) {
+                            if (!line.startsWith('data: ')) continue;
+                            try {
+                                const msg = JSON.parse(line.slice(6));
+                                if (msg.progress !== undefined) {
+                                    const bar = document.getElementById('dict-bar-' + id);
+                                    if (bar) bar.style.width = msg.progress + '%';
+                                }
+                                if (msg.done) {
+                                    this._dictDownloading.delete(id);
+                                    this._loadDictStatus();
+                                    const toast = document.createElement('div');
+                                    toast.className = 'konami-toast';
+                                    toast.textContent = '\u2705 ' + t('Dict installed');
+                                    document.body.appendChild(toast);
+                                    toast.addEventListener('animationend', () => toast.remove());
+                                    localStorage.setItem('dict-hint-count', '999');
+                                    return;
+                                }
+                                if (msg.error) { alert(msg.error); this._dictDownloading.delete(id); this._loadDictStatus(); return; }
+                            } catch {}
+                        }
+                    }
+                } catch (e) { alert(e.message); }
+                this._dictDownloading.delete(id);
+                this._loadDictStatus();
+            },
+            // --- AI Provider Management ---
+            _providerDefs: {
+                openai:      {name: 'OpenAI',       model: 'gpt-4o-mini'},
+                anthropic:   {name: 'Anthropic',    model: 'claude-sonnet-4-20250514'},
+                gemini:      {name: 'Google Gemini', model: 'gemini-2.5-flash'},
+                deepseek:    {name: 'DeepSeek',     model: 'deepseek-chat'},
+                grok:        {name: 'Grok (xAI)',   model: 'grok-3-mini-fast'},
+                dashscope:   {name: '阿里云百炼',    model: 'qwen-plus'},
+                volcengine:  {name: '火山引擎',      model: 'doubao-1-5-pro-32k-250115'},
+                hunyuan:     {name: '腾讯混元',      model: 'hunyuan-turbos-latest'},
+                minimax:     {name: 'MiniMax',      model: 'MiniMax-M2.5'},
+                moonshot:    {name: '月之暗面',      model: 'moonshot-v1-8k'},
+                siliconflow: {name: '硅基流动',      model: 'Qwen/Qwen2.5-7B-Instruct'},
+                cerebras:    {name: 'Cerebras',     model: 'llama-3.3-70b'},
+                sambanova:   {name: 'SambaNova',    model: 'Meta-Llama-3.3-70B-Instruct'},
+                groq:        {name: 'Groq',         model: 'llama-3.3-70b-versatile'},
+                mistral:     {name: 'Mistral',      model: 'mistral-small-latest'},
+                deepinfra:   {name: 'DeepInfra',    model: 'meta-llama/Llama-3.3-70B-Instruct'},
+                together:    {name: 'Together AI',  model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo'},
+                openrouter:  {name: 'OpenRouter',   model: 'openai/gpt-4o-mini'},
+                zhipuai:     {name: '智谱AI',        model: 'glm-4.7-flash'},
+                modelscope:  {name: 'ModelScope',   model: 'Qwen/Qwen2.5-72B-Instruct'},
+                custom:      {name: '自定义 (OpenAI 兼容)', model: ''},
+            },
+            _providers: [],
+            _taskRouting: {},
+            async loadProviders() {
+                try {
+                    const resp = await fetch('/api/ai/providers');
+                    const data = await resp.json();
+                    this._providers = data.providers || [];
+                    this._taskRouting = data.task_routing || {};
+                    this._renderProviders();
+                    this._renderTaskRouting();
+                    this._updateAISummary();
+                } catch (e) { console.error('Failed to load providers', e); }
+            },
+            _dragIdx: null, _dragStartX: 0, _dragStartY: 0,
+            _renderProviders() {
+                const list = document.getElementById('ai-providers-list');
+                if (!list) return;
+                const panel = document.getElementById('settings-panel');
+                const savedScroll = panel ? panel.scrollTop : 0;
+                list.innerHTML = '';
+                const defs = this._providerDefs;
+                const primaryIdx = this._providers.findIndex(p => p.enabled && (p.has_key || p._newKey));
+                let enabledRank = 0;
+                this._providers.forEach((p, idx) => {
+                    const card = document.createElement('div');
+                    card.className = 'ai-provider-card';
+                    if (idx === primaryIdx) card.classList.add('apc-primary');
+                    card.dataset.idx = idx;
+                    const def = defs[p.id] || defs['custom'] || {};
+                    const isCustom = p.id.startsWith('custom');
+                    const displayModel = p.model || def.model || '';
+                    const isEnabled = p.enabled && (p.has_key || p._newKey);
+                    if (isEnabled) enabledRank++;
+                    const rank = isEnabled ? enabledRank : '';
+                    const allIds = Object.keys(defs).filter(id => id !== 'custom');
+                    const usedIds = this._providers.map((x, i) => i !== idx ? x.id : null).filter(Boolean);
+                    const optionsHtml = '<option value="" disabled>' + t('Select provider') + '</option>' +
+                        allIds.map(id => {
+                            const dis = usedIds.includes(id) ? ' disabled' : '';
+                            const sel = id === p.id ? ' selected' : '';
+                            return `<option value="${id}"${sel}${dis}>${(defs[id]||{}).name || id}</option>`;
+                        }).join('') +
+                        `<option value="custom"${isCustom ? ' selected' : ''}>${defs.custom.name}</option>`;
+                    card.innerHTML = `
+                        <div class="apc-header">
+                            <div class="apc-rank">${rank || '·'}</div>
+                            <span class="apc-drag" title="拖拽排序">☰</span>
+                            <select onchange="UX._onProviderChange(${idx}, this.value)" style="flex:1">${optionsHtml}</select>
+                            <label class="toggle-switch" style="flex-shrink:0">
+                                <input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="UX._onProviderToggle(${idx}, this.checked)">
+                                <span class="toggle-track"></span>
+                            </label>
+                            <button type="button" class="apc-del" onclick="UX._delProvider(${idx})" title="Delete">×</button>
+                        </div>
+                        ${isCustom ? `<div class="apc-custom-row"><input placeholder="供应商名称" value="${p.custom_name || ''}" onblur="UX._onCustomNameChange(${idx}, this.value)"><input type="url" placeholder="Base URL (https://...)" value="${p.base_url || ''}" onblur="UX._onBaseUrlChange(${idx}, this.value)"></div>` : ''}
+                        <div class="apc-key-row">
+                            <input class="apc-key-input" type="password" placeholder="API Key" value="${p.has_key ? (p.key_preview || '***') : ''}" data-saved="${p.has_key ? '1' : ''}"
+                                onfocus="if(this.dataset.saved){this.value='';this.dataset.saved='';this.type='text'}"
+                                onblur="UX._onKeyChange(${idx}, this)">
+                            <button type="button" class="apc-key-toggle" onclick="UX._toggleKeyVis(this)"><svg viewBox="0 0 24 24"><path d="M2.4 12c2.6 3.8 5.8 5.6 9.6 5.6s7-1.8 9.6-5.6"/><line x1="5.2" y1="15.2" x2="3.8" y2="18"/><line x1="9.2" y1="17" x2="8.6" y2="20"/><line x1="14.8" y1="17" x2="15.4" y2="20"/><line x1="18.8" y1="15.2" x2="20.2" y2="18"/></svg></button>
+                        </div>
+                        <div class="apc-model-row">
+                            <input class="apc-model-input" placeholder="${def.model || 'Model'}" value="${displayModel}"
+                                onblur="UX._onModelChange(${idx}, this.value)">
+                            <button type="button" class="apc-fetch-btn" onclick="UX._fetchModels(${idx})" data-i18n="Fetch">${t('Fetch')}</button>
+                            <button type="button" class="apc-test-btn" onclick="UX._testProvider(${idx})" data-i18n="Test">${t('Test')}</button>
+                        </div>
+                        <div class="apc-bottom">
+                            <span class="apc-status" id="apc-status-${idx}" onclick="if(this.textContent){navigator.clipboard.writeText(this.textContent);const o=this.style.opacity;this.style.opacity='0.4';setTimeout(()=>this.style.opacity=o,300)}" title="点击复制"></span>
+                            <button type="button" class="apc-advanced-toggle" onclick="this.parentElement.nextElementSibling.classList.toggle('show')" data-i18n="Advanced">${t('Advanced')}</button>
+                        </div>
+                        <div class="apc-advanced">
+                            <div class="apc-adv-row">
+                                <label>Temperature</label>
+                                <input type="text" inputmode="decimal" placeholder="自动：翻译0.1 分析0.3 聊天0.7" value="${p.temperature ?? ''}"
+                                    onblur="UX._onAdvChange(${idx}, 'temperature', this.value)">
+                            </div>
+                            <div class="apc-adv-row">
+                                <label>Max Tokens</label>
+                                <input type="text" inputmode="numeric" placeholder="自动：最大输出4096 token" value="${p.max_tokens ?? ''}"
+                                    onblur="UX._onAdvChange(${idx}, 'max_tokens', this.value)">
+                            </div>
+                            ${!isCustom ? `<div class="apc-adv-row"><label>Base URL</label><input type="url" placeholder="${p.default_base_url || 'https://...'}" value="${p.base_url || ''}" onblur="UX._onBaseUrlChange(${idx}, this.value)"></div>` : ''}
+                        </div>
+                    `;
+                    // Drag: only from ☰ handle, vertical only
+                    const handle = card.querySelector('.apc-drag');
+                    handle.addEventListener('mousedown', () => { card.draggable = true; });
+                    handle.addEventListener('touchstart', () => { card.draggable = true; }, {passive: true});
+                    card.addEventListener('dragstart', e => {
+                        if (!card.draggable) { e.preventDefault(); return; }
+                        UX._dragStartY = e.clientY;
+                        UX._dragStartX = e.clientX;
+                        UX._dragIdx = idx;
+                        card.classList.add('dragging');
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+                    card.addEventListener('dragend', () => {
+                        card.draggable = false;
+                        card.classList.remove('dragging');
+                        list.querySelectorAll('.drag-before,.drag-after').forEach(el => { el.classList.remove('drag-before', 'drag-after'); });
+                        UX._dragIdx = null;
+                    });
+                    card.addEventListener('dragover', e => {
+                        if (UX._dragIdx === null || UX._dragIdx === idx) return;
+                        const dy = Math.abs(e.clientY - (UX._dragStartY || 0));
+                        const dx = Math.abs(e.clientX - (UX._dragStartX || e.clientX));
+                        if (dy < dx) return; // ignore horizontal drag
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        // Show insertion line above or below based on cursor position
+                        const rect = card.getBoundingClientRect();
+                        const isAbove = e.clientY < rect.top + rect.height / 2;
+                        card.classList.toggle('drag-before', isAbove);
+                        card.classList.toggle('drag-after', !isAbove);
+                    });
+                    card.addEventListener('dragleave', () => card.classList.remove('drag-before', 'drag-after'));
+                    card.addEventListener('drop', e => {
+                        e.preventDefault();
+                        const rect = card.getBoundingClientRect();
+                        const insertBefore = e.clientY < rect.top + rect.height / 2;
+                        card.classList.remove('drag-before', 'drag-after');
+                        const from = UX._dragIdx;
+                        if (from === null || from === idx) return;
+                        const arr = UX._providers;
+                        const [moved] = arr.splice(from, 1);
+                        // Recalculate target index after removal
+                        let target = idx > from ? idx - 1 : idx;
+                        if (!insertBefore) target++;
+                        arr.splice(target, 0, moved);
+                        UX._renderProviders();
+                        UX._renderTaskRouting();
+                        UX._saveProviders();
+                    });
+                    list.appendChild(card);
+                });
+                if (panel) panel.scrollTop = savedScroll;
+            },
+            addProvider() {
+                const used = new Set(this._providers.map(p => p.id));
+                const allIds = Object.keys(this._providerDefs).filter(id => id !== 'custom');
+                let nextId = allIds.find(id => !used.has(id));
+                if (!nextId) {
+                    // All preset providers used, add a custom one
+                    if (!used.has('custom')) { nextId = 'custom'; }
+                    else { let n = 2; while (used.has(`custom_${n}`)) n++; nextId = `custom_${n}`; }
+                }
+                const def = this._providerDefs[nextId] || this._providerDefs['custom'] || {};
+                this._providers.push({
+                    id: nextId, name: def.name || '', has_key: false, key_preview: '',
+                    enabled: true, model: def.model || '', base_url: '',
+                    default_model: def.model || '', default_base_url: '', _newKey: '',
+                    custom_name: '',
+                });
+                this._renderProviders();
+            },
+            _delProvider(idx) {
+                this._providers.splice(idx, 1);
+                this._renderProviders();
+                this._renderTaskRouting();
+                this._saveProviders();
+            },
+            _onProviderChange(idx, newId) {
+                const p = this._providers[idx];
+                if (newId === 'custom') {
+                    // Generate unique custom ID
+                    const used = new Set(this._providers.map(x => x.id));
+                    if (p.id.startsWith('custom')) { newId = p.id; }
+                    else if (!used.has('custom')) { newId = 'custom'; }
+                    else { let n = 2; while (used.has(`custom_${n}`)) n++; newId = `custom_${n}`; }
+                }
+                const def = this._providerDefs[newId] || this._providerDefs['custom'] || {};
+                p.id = newId;
+                p.name = def.name || newId;
+                p.model = def.model || '';
+                p.base_url = '';
+                p.has_key = false;
+                p._newKey = '';
+                p.custom_name = '';
+                this._renderProviders();
+                this._renderTaskRouting();
+                this._saveProviders();
+            },
+            _onProviderToggle(idx, enabled) {
+                this._providers[idx].enabled = enabled;
+                this._renderTaskRouting();
+                this._saveProviders();
+            },
+            _onKeyChange(idx, input) {
+                const val = input.value.trim();
+                if (val) {
+                    const p = this._providers[idx];
+                    p._newKey = val;
+                    p.has_key = true;
+                    if (!p.enabled) { p.enabled = true; this._renderProviders(); }
+                    this._renderTaskRouting();
+                    this._saveProviders();
+                } else if (!input.dataset.saved) {
+                    // User cleared the field — restore preview if key exists on server
+                    const p = this._providers[idx];
+                    if (p.has_key && p.key_preview) {
+                        input.value = p.key_preview;
+                        input.dataset.saved = '1';
+                    }
+                }
+            },
+            _onModelChange(idx, val) {
+                this._providers[idx].model = val.trim();
+                this._renderTaskRouting();
+                this._saveProviders();
+            },
+            _onBaseUrlChange(idx, val) {
+                this._providers[idx].base_url = val.trim();
+                this._saveProviders();
+            },
+            _toggleKeyVis(btn) {
+                const inp = btn.previousElementSibling;
+                const show = inp.type === 'password';
+                inp.type = show ? 'text' : 'password';
+                btn.innerHTML = show
+                    ? '<svg viewBox="0 0 24 24"><path d="M2.4 12c2 3.4 5.4 5.6 9.6 5.6S19.6 15.4 21.6 12c-2-3.4-5.4-5.6-9.6-5.6S4.4 8.6 2.4 12z"/><circle cx="12" cy="12" r="3.2"/></svg>'
+                    : '<svg viewBox="0 0 24 24"><path d="M2.4 12c2.6 3.8 5.8 5.6 9.6 5.6s7-1.8 9.6-5.6"/><line x1="5.2" y1="15.2" x2="3.8" y2="18"/><line x1="9.2" y1="17" x2="8.6" y2="20"/><line x1="14.8" y1="17" x2="15.4" y2="20"/><line x1="18.8" y1="15.2" x2="20.2" y2="18"/></svg>';
+            },
+            _onCustomNameChange(idx, val) {
+                this._providers[idx].custom_name = val.trim();
+                this._renderTaskRouting();
+                this._saveProviders();
+            },
+            _onAdvChange(idx, field, val) {
+                const num = val === '' ? null : parseFloat(val);
+                this._providers[idx][field] = (num !== null && !isNaN(num)) ? num : null;
+                this._saveProviders();
+            },
+            _renderTaskRouting() {
+                const container = document.getElementById('ai-task-routing');
+                if (!container) return;
+                const _t = (k) => state.language === 'zh' ? (_i18n[k] || k.replace(/^rt_/, '')) : k.replace(/^rt_/, '');
+                const tasks = [
+                    {id: 'analyze', label: _t('rt_Analyze'), icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c-1 0-3-2-3-5s2-5 3-5"/><path d="M3 12c1 0 3 2 3 5s-2 5-3 5"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/></svg>'},
+                    {id: 'chat', label: _t('rt_Chat'), icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'},
+                    {id: 'translate', label: _t('rt_Translate'), icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>'},
+                    {id: 'dict', label: _t('rt_Dictionary'), icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>'},
+                ];
+                const enabled = this._providers.filter(p => p.enabled && (p.has_key || p._newKey));
+                container.innerHTML = tasks.map(t => {
+                    const current = this._taskRouting[t.id] || '';
+                    const autoLabel = _t('Auto (by priority)');
+                    const opts = '<option value=""' + (!current ? ' selected' : '') + '>' + autoLabel + '</option>' +
+                        enabled.map(p => {
+                            const def = this._providerDefs[p.id] || this._providerDefs['custom'] || {};
+                            const name = (p.id.startsWith('custom') && p.custom_name) ? p.custom_name : (def.name || p.id);
+                            const model = p.model || def.model || '';
+                            const sel = current === p.id ? ' selected' : '';
+                            return `<option value="${p.id}"${sel}>${name} (${model})</option>`;
+                        }).join('');
+                    return `<div class="ai-task-row"><span class="ai-task-icon">${t.icon}</span><label>${t.label}</label><select onchange="UX._onTaskRoute('${t.id}', this.value)">${opts}</select></div>`;
+                }).join('');
+            },
+            toggleTaskRouting() {
+                const section = document.getElementById('ai-task-routing-section');
+                section.classList.toggle('expanded');
+                localStorage.setItem('ai-task-routing-expanded', section.classList.contains('expanded') ? '1' : '');
+            },
+            toggleConfigSection() {
+                const section = document.getElementById('ai-config-section');
+                section.classList.toggle('expanded');
+                localStorage.setItem('ai-config-expanded', section.classList.contains('expanded') ? '1' : '');
+            },
+            _onTaskRoute(task, pid) {
+                if (pid) this._taskRouting[task] = pid;
+                else delete this._taskRouting[task];
+                this._saveProviders();
+            },
+            toggleAISection() {
+                const section = document.getElementById('ai-providers-section');
+                section.classList.toggle('expanded');
+                localStorage.setItem('ai-section-expanded', section.classList.contains('expanded') ? '1' : '');
+            },
+            _updateAISummary() {
+                const el = document.getElementById('ai-section-summary');
+                if (!el) return;
+                const zh = state.language === 'zh';
+                const total = this._providers.length;
+                const ready = this._providers.filter(p => p.enabled && (p.has_key || p._newKey));
+                const enabledNoKey = this._providers.filter(p => p.enabled && !p.has_key && !p._newKey);
+                let color, text;
+                if (ready.length > 0 && enabledNoKey.length === 0) {
+                    color = 'green'; text = zh ? `${ready.length} 个模型已启用` : `${ready.length} model${ready.length > 1 ? 's' : ''} active`;
+                } else if (ready.length > 0 && enabledNoKey.length > 0) {
+                    color = 'yellow'; text = zh ? `${ready.length} 个可用，${enabledNoKey.length} 个缺少 Key` : `${ready.length} ready, ${enabledNoKey.length} missing key`;
+                } else if (total > 0) {
+                    color = 'red'; text = zh ? '无可用模型' : 'No models available';
+                } else {
+                    color = 'red'; text = zh ? '未配置' : 'Not configured';
+                }
+                el.innerHTML = `${text}<span class="ai-status-dot ${color}"></span>`;
+            },
+            exportConfig() {
+                const a = document.createElement('a');
+                a.href = '/api/ai/export-config';
+                a.download = 'ai_config.json';
+                a.click();
+            },
+            async importConfig(input) {
+                const file = input.files[0];
+                if (!file) return;
+                input.value = '';
+                try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    if (!data.providers || typeof data.providers !== 'object') {
+                        alert('无效的配置文件：缺少 providers');
+                        return;
+                    }
+                    const count = Object.keys(data.providers).length;
+                    if (!confirm(`确认导入 ${count} 个供应商配置？当前配置将被覆盖。`)) return;
+                    const resp = await fetch('/api/ai/import-config', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: text
+                    });
+                    const result = await resp.json();
+                    if (result.ok) {
+                        await this.loadProviders();
+                        alert(`已导入 ${result.count} 个供应商配置`);
+                    } else {
+                        alert('导入失败: ' + (result.detail || '未知错误'));
+                    }
+                } catch (e) {
+                    alert('导入失败: ' + e.message);
+                }
+            },
+            async _saveProviders() {
+                try {
+                    const merged = this._providers.map(p => {
+                        const out = {
+                            id: p.id,
+                            api_key: p._newKey || '',
+                            enabled: p.enabled,
+                            model: p.model,
+                            base_url: p.base_url,
+                        };
+                        if (p.temperature != null) out.temperature = p.temperature;
+                        if (p.max_tokens != null) out.max_tokens = p.max_tokens;
+                        if (p.id.startsWith('custom') && p.custom_name) out.custom_name = p.custom_name;
+                        return out;
+                    });
+                    await fetch('/api/ai/providers', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({providers: merged, task_routing: this._taskRouting}),
+                    });
+                } catch (e) { console.error('Save providers failed', e); }
+                this._updateAISummary();
+            },
+            async _testProvider(idx) {
+                const p = this._providers[idx];
+                const status = document.getElementById('apc-status-' + idx);
+                if (!status) return;
+                status.className = 'apc-status';
+                status.textContent = '⏳ Testing...';
+                try {
+                    const card = document.querySelectorAll('.ai-provider-card')[idx];
+                    const keyInput = card?.querySelector('.apc-key-input');
+                    const realKey = p._newKey || (keyInput && !keyInput.dataset.saved ? keyInput.value : '');
+                    const resp = await fetch('/api/ai/test-provider', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id: p.id, api_key: realKey, model: p.model, base_url: p.base_url}),
+                    });
+                    const data = await resp.json();
+                    if (data.ok) { status.className = 'apc-status ok'; status.textContent = '✓ ' + data.message; }
+                    else { status.className = 'apc-status fail'; status.textContent = '✗ ' + data.message; }
+                } catch (e) { status.className = 'apc-status fail'; status.textContent = '✗ ' + e.message; }
+            },
+            async _fetchModels(idx) {
+                const p = this._providers[idx];
+                const card = document.querySelectorAll('.ai-provider-card')[idx];
+                const btn = card?.querySelector('.apc-fetch-btn');
+                const modelEl = card?.querySelector('.apc-model-input, .apc-model-select');
+                if (!btn || !modelEl) return;
+                const orig = btn.textContent;
+                btn.textContent = '...';
+                btn.disabled = true;
+                try {
+                    const keyInput = card.querySelector('.apc-key-input');
+                    const realKey = p._newKey || (keyInput && !keyInput.dataset.saved ? keyInput.value : '');
+                    const resp = await fetch('/api/ai/fetch-models', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id: p.id, api_key: realKey, base_url: p.base_url}),
+                    });
+                    const data = await resp.json();
+                    if (data.models && data.models.length > 0) {
+                        const sel = document.createElement('select');
+                        sel.className = 'apc-model-select';
+                        const currentModel = p.model || '';
+                        // Add manual input option at top
+                        const customOpt = document.createElement('option');
+                        customOpt.value = '__custom__';
+                        customOpt.textContent = '✏️ ' + t('Manual input');
+                        sel.appendChild(customOpt);
+                        let hasMatch = false;
+                        data.models.forEach(m => {
+                            const opt = document.createElement('option');
+                            opt.value = m; opt.textContent = m;
+                            if (m === currentModel) { opt.selected = true; hasMatch = true; }
+                            sel.appendChild(opt);
+                        });
+                        if (!hasMatch && currentModel) {
+                            // Current model not in list, add it
+                            const opt = document.createElement('option');
+                            opt.value = currentModel; opt.textContent = currentModel + ' (current)';
+                            opt.selected = true;
+                            sel.insertBefore(opt, sel.children[1]);
+                        }
+                        sel.onchange = () => {
+                            if (sel.value === '__custom__') {
+                                // Revert to input
+                                const inp = document.createElement('input');
+                                inp.className = 'apc-model-input';
+                                inp.placeholder = (this._providerDefs[p.id] || this._providerDefs['custom'] || {}).model || 'Model';
+                                inp.value = p.model || '';
+                                inp.onblur = () => { p.model = inp.value.trim(); this._saveProviders(); };
+                                sel.replaceWith(inp);
+                                inp.focus();
+                            } else {
+                                p.model = sel.value;
+                                this._saveProviders();
+                            }
+                        };
+                        modelEl.replaceWith(sel);
+                        const status = document.getElementById('apc-status-' + idx);
+                        if (status) { status.className = 'apc-status ok'; status.textContent = '✓ ' + data.models.length + ' 个模型可用'; }
+                    } else {
+                        const status = document.getElementById('apc-status-' + idx);
+                        if (status) { status.className = 'apc-status fail'; status.textContent = data.error || 'No models — ' + t('Manual input'); }
+                    }
+                } catch (e) {
+                    const status = document.getElementById('apc-status-' + idx);
+                    if (status) { status.className = 'apc-status fail'; status.textContent = e.message; }
+                }
+                btn.textContent = orig;
+                btn.disabled = false;
+            },
         };
 
         const AI = {
@@ -3653,6 +4381,14 @@
                 toolbar.style.top = top + 'px';
                 toolbar.style.left = left + 'px';
                 toolbar.classList.add('visible');
+
+                // Auto-translate single words / short phrases
+                const wordCount = text.split(/\s+/).length;
+                if (wordCount <= 3 && text.length <= 40 && !text.includes('\n')) {
+                    // Strip leading/trailing punctuation so dictionary lookup works
+                    const clean = text.replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu, '');
+                    if (clean) this._doTranslate(clean);
+                }
             },
             _getSelectionInfo(sel) {
                 if (!sel.rangeCount) return null;
@@ -3784,18 +4520,34 @@
                     let html = '';
                     const speakBtn = `<button onclick="Sel._speak('${text.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' ')}')" style="background:none;border:none;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:0.5;transition:opacity 0.2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" title="${t('Pronounce')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>`;
                     if (data.source === 'dict') {
-                        // Dictionary card: word + phonetic + speak, then translation
+                        // English dictionary card: word + phonetic + speak, then translation
                         html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${data.word}</b>`;
                         if (data.phonetic) html += ` <span style="opacity:0.6">/${data.phonetic}/</span>`;
                         html += ` ${speakBtn}</div>`;
                         if (data.translation) html += `<div class="lookup-translation">${data.translation.replace(/\n/g, '<br>')}</div>`;
                         if (data.definition) html += `<div class="lookup-explanation" style="margin-top:6px;font-size:0.78rem">${data.definition.split('\n').slice(0,2).join('<br>')}</div>`;
+                    } else if (data.source === 'cn-dict' || data.source === 'ai-dict') {
+                        // Chinese dictionary card: word + pinyin + speak, then definition
+                        html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${data.word}</b>`;
+                        if (data.pinyin) html += ` <span style="opacity:0.6">${data.pinyin}</span>`;
+                        html += ` ${speakBtn}</div>`;
+                        html += `<div class="lookup-translation">${data.translation.replace(/\n/g, '<br>')}</div>`;
                     } else if (data.translation) {
                         html += `<div class="lookup-translation">${data.translation} ${speakBtn}</div>`;
                     }
                     if (html) {
                         const safeText = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
                         html += `<div style="margin-top:8px;border-top:1px solid var(--outline);padding-top:6px"><button class="sel-btn" style="padding:3px 8px;font-size:0.65rem" onclick="AI.translate('${safeText}'); Sel.closeLookup()">${t('Ask AI for deep translation')}</button></div>`;
+                        // Dict install hint (max 3 times) when falling back to Google Translate
+                        if (data.source === 'google') {
+                            const hintCount = parseInt(localStorage.getItem('dict-hint-count') || '0');
+                            const ds = UX._dictStatus;
+                            const hasMissing = ds && Object.values(ds.dicts).some(d => !d.installed);
+                            if (hintCount < 9 && hasMissing) {
+                                html += `<div style="font-size:0.62rem;color:var(--secondary);opacity:0.6;margin-top:6px;cursor:pointer" onclick="toggleSettings();document.getElementById('dict-section').scrollIntoView({behavior:'smooth'})">💡 ${t('dict_hint')} → ${t('Go to Settings')}</div>`;
+                                localStorage.setItem('dict-hint-count', String(hintCount + 1));
+                            }
+                        }
                     }
                     contentEl.innerHTML = html || '<div class="lookup-loading">' + t('No results') + '</div>';
                     this._showLookup();
@@ -3845,6 +4597,17 @@
                 if (top + ph > window.innerHeight - 20) {
                     top = rect.top - ph - 10;
                 }
+
+                // Avoid overlapping with selection toolbar
+                const toolbar = document.getElementById('selection-toolbar');
+                if (toolbar.classList.contains('visible')) {
+                    const tb = toolbar.getBoundingClientRect();
+                    if (top < tb.bottom && top + ph > tb.top) {
+                        // Overlap — flip to opposite side of selection
+                        top = (top >= rect.bottom) ? rect.top - ph - 10 : rect.bottom + 10;
+                    }
+                }
+
                 left = Math.max(12, Math.min(left, window.innerWidth - pw - 12));
                 top = Math.max(12, top);
 
@@ -3937,8 +4700,79 @@
                 _showPanelMobile();
             } else if (_isMobile()) _overlay.classList.remove('visible');
         }
+        // Long-press settings gear (3s) → show Konami hint toast
+        (function() {
+            const gear = document.getElementById('toggle-settings');
+            let timer = null;
+            gear.addEventListener('mousedown', () => { timer = setTimeout(() => { const t = document.createElement('div'); t.className = 'konami-toast'; t.textContent = '🎮 ↑ ↑ ↓ ↓ ← → ← → B A'; document.body.appendChild(t); t.addEventListener('animationend', () => t.remove()); }, 3000); });
+            gear.addEventListener('mouseup', () => clearTimeout(timer));
+            gear.addEventListener('mouseleave', () => clearTimeout(timer));
+            gear.addEventListener('touchstart', () => { timer = setTimeout(() => { const t = document.createElement('div'); t.className = 'konami-toast'; t.textContent = '🎮 ↑ ↑ ↓ ↓ ← → ← → B A'; document.body.appendChild(t); t.addEventListener('animationend', () => t.remove()); }, 3000); }, { passive: true });
+            gear.addEventListener('touchend', () => clearTimeout(timer));
+        })();
+        // Konami Code: ↑↑↓↓←→←→BA — unlock AI section
+        (function() {
+            const seq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+            let pos = 0;
+            function playUnlockSfx() {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+                notes.forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.12, ctx.currentTime + i * 0.09);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.09 + 0.15);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + i * 0.09);
+                    osc.stop(ctx.currentTime + i * 0.09 + 0.15);
+                });
+            }
+            function playLockSfx() {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const notes = [784, 523]; // G5 C5
+                notes.forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.15);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + i * 0.12);
+                    osc.stop(ctx.currentTime + i * 0.12 + 0.15);
+                });
+            }
+            document.addEventListener('keydown', (e) => {
+                if (e.key === seq[pos] || e.key.toLowerCase() === seq[pos]) {
+                    if (++pos === seq.length) {
+                        pos = 0;
+                        const s = document.getElementById('ai-providers-section');
+                        const unlocked = s.classList.toggle('unlocked');
+                        localStorage.setItem('ai-section-unlocked', unlocked ? '1' : '');
+                        const hint = document.querySelector('.konami-hint');
+                        if (unlocked) {
+                            playUnlockSfx();
+                            if (hint) hint.style.display = 'none';
+                            s.style.animation = 'aiUnlock 0.5s ease-out';
+                            s.addEventListener('animationend', () => s.style.animation = '', { once: true });
+                        } else {
+                            playLockSfx();
+                            if (hint) hint.style.display = '';
+                            s.classList.remove('expanded');
+                        }
+                    }
+                } else {
+                    pos = e.key === seq[0] ? 1 : 0;
+                }
+            });
+        })();
         document.addEventListener('click', (e) => {
             const grp = document.querySelector('.toggle-group');
+            const main = document.getElementById('main');
+            if (!main.contains(e.target) && !grp.contains(e.target)) return;
+            // Only close panels when clicking on the main reading area or toggle buttons
             const sp = document.getElementById('settings-panel');
             if (sp.style.display === 'block' && !sp.contains(e.target) && !grp.contains(e.target)) sp.style.display = 'none';
             const nb = document.getElementById('notebook-panel');
@@ -4285,6 +5119,7 @@
         const _contentEl = document.getElementById('readable-content');
 
         UX.init(); Audio.init(); Highlights.init(); Bookmarks.load(); Progress.init(); ReadingStats.init(); Sel.init(); AI._initFade(); MagneticNav.init();
+        console.log('%c🎮 This page has a secret...', 'color:#888;font-size:11px;font-style:italic');
         // Update bookmark button state on scroll (debounced)
         let _bmScrollTimer = null;
         _scrollContainer.addEventListener('scroll', () => {
@@ -4363,6 +5198,8 @@
             // Skip if user is typing in an input/textarea/contenteditable
             const el = document.activeElement;
             if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+            // Skip when settings panel is open (allow Konami Code input)
+            if (document.getElementById('settings-panel').style.display === 'block') return;
 
             // --- Font size: +/= (bigger), - (smaller), 0 (reset) ---
             if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.code === 'Equal' || e.code === 'Minus' || e.code === 'Digit0')) {

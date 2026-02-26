@@ -20,3 +20,6 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# AI config (contains API keys)
+ai_config.json

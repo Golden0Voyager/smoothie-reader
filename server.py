@@ -5,6 +5,7 @@ import pickle
 import asyncio
 import sqlite3
 import tempfile
+import zlib
 from functools import lru_cache
 from typing import Optional
 
@@ -24,77 +25,244 @@ from reader3 import Book, BookMetadata, ChapterContent, TOCEntry, process_epub, 
 # Load .env file automatically
 load_dotenv()
 
-# Configure Gemini
-GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+# --- AI Provider System ---
+AI_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ai_config.json')
 
-if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
-    # Applying vercel-best-practice: Using gemini-3-flash-preview for speed/cost balance,
-    # but the prompt engineering ensures Pro-level depth.
-    model = genai.GenerativeModel('gemini-3-flash-preview')
+_PROVIDER_DEFS = {
+    'openai':      {'name': 'OpenAI',       'base_url': 'https://api.openai.com/v1/',                           'default_model': 'gpt-4o-mini',                    'format': 'openai'},
+    'anthropic':   {'name': 'Anthropic',     'base_url': 'https://api.anthropic.com/v1/',                        'default_model': 'claude-sonnet-4-20250514',       'format': 'anthropic'},
+    'gemini':      {'name': 'Google Gemini', 'base_url': '',                                                     'default_model': 'gemini-2.5-flash',               'format': 'gemini'},
+    'deepseek':    {'name': 'DeepSeek',      'base_url': 'https://api.deepseek.com/v1/',                         'default_model': 'deepseek-chat',                  'format': 'openai'},
+    'grok':        {'name': 'Grok (xAI)',    'base_url': 'https://api.x.ai/v1/',                                 'default_model': 'grok-3-mini-fast',               'format': 'openai'},
+    'dashscope':   {'name': '阿里云百炼',     'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1/',   'default_model': 'qwen-plus',                      'format': 'openai'},
+    'volcengine':  {'name': '火山引擎',       'base_url': 'https://ark.cn-beijing.volces.com/api/v3/',            'default_model': 'doubao-1-5-pro-32k-250115',     'format': 'openai'},
+    'hunyuan':     {'name': '腾讯混元',       'base_url': 'https://api.hunyuan.cloud.tencent.com/v1/',            'default_model': 'hunyuan-turbos-latest',          'format': 'openai'},
+    'minimax':     {'name': 'MiniMax',       'base_url': 'https://api.minimax.io/v1/',                           'default_model': 'MiniMax-M2.5',                   'format': 'openai'},
+    'moonshot':    {'name': '月之暗面',       'base_url': 'https://api.moonshot.cn/v1/',                          'default_model': 'moonshot-v1-8k',                 'format': 'openai'},
+    'siliconflow': {'name': '硅基流动',       'base_url': 'https://api.siliconflow.cn/v1/',                       'default_model': 'Qwen/Qwen2.5-7B-Instruct',      'format': 'openai'},
+    'cerebras':    {'name': 'Cerebras',      'base_url': 'https://api.cerebras.ai/v1/',                          'default_model': 'llama-3.3-70b',                  'format': 'openai'},
+    'sambanova':   {'name': 'SambaNova',     'base_url': 'https://api.sambanova.ai/v1/',                         'default_model': 'Meta-Llama-3.3-70B-Instruct',   'format': 'openai'},
+    'groq':        {'name': 'Groq',          'base_url': 'https://api.groq.com/openai/v1/',                      'default_model': 'llama-3.3-70b-versatile',        'format': 'openai'},
+    'mistral':     {'name': 'Mistral',       'base_url': 'https://api.mistral.ai/v1/',                           'default_model': 'mistral-small-latest',           'format': 'openai'},
+    'deepinfra':   {'name': 'DeepInfra',     'base_url': 'https://api.deepinfra.com/v1/openai/',                 'default_model': 'meta-llama/Llama-3.3-70B-Instruct', 'format': 'openai'},
+    'together':    {'name': 'Together AI',   'base_url': 'https://api.together.xyz/v1/',                         'default_model': 'meta-llama/Llama-3.3-70B-Instruct-Turbo', 'format': 'openai'},
+    'openrouter':  {'name': 'OpenRouter',    'base_url': 'https://openrouter.ai/api/v1/',                        'default_model': 'openai/gpt-4o-mini',             'format': 'openai'},
+    'zhipuai':     {'name': '智谱AI',         'base_url': 'https://open.bigmodel.cn/api/paas/v4/',               'default_model': 'glm-4.7-flash',                  'format': 'openai'},
+    'modelscope':  {'name': 'ModelScope',    'base_url': 'https://api-inference.modelscope.cn/v1/',             'default_model': 'Qwen/Qwen2.5-72B-Instruct',     'format': 'openai'},
+    'custom':      {'name': '自定义 (OpenAI 兼容)', 'base_url': '',                                              'default_model': '',                               'format': 'openai'},
+}
+
+_ai_config = {'providers': {}, 'order': []}
+
+# --- Dictionary Management ---
+_DICT_DIR = os.path.join(os.path.dirname(__file__), 'dict')
+_DICT_FILES = {
+    'ecdict':  {'filename': 'stardict.db', 'label': 'ECDICT英文词典', 'label_en': 'ECDICT English', 'size_mb': 307, 'gz_mb': 134},
+    'cn_dict': {'filename': 'cn_dict.db',  'label': '中文词典',       'label_en': 'Chinese Dict',    'size_mb': 48,  'gz_mb': 25},
+}
+_DEFAULT_DICT_URL = 'https://github.com/Golden0Voyager/reader3-dict/releases/download/dict-v1'
+
+
+def _load_ai_config():
+    """Load AI provider config from JSON file."""
+    global _ai_config
+    if os.path.exists(AI_CONFIG_PATH):
+        try:
+            with open(AI_CONFIG_PATH, 'r') as f:
+                _ai_config = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    _ai_config.setdefault('providers', {})
+    _ai_config.setdefault('order', [])
+
+
+def _save_ai_config():
+    """Save AI provider config to JSON file."""
+    with open(AI_CONFIG_PATH, 'w') as f:
+        json.dump(_ai_config, f, indent=2, ensure_ascii=False)
+
+
+def _get_builtin_providers():
+    """Return builtin provider configs from .env (in-memory only, never shown in UI)."""
+    builtins = []
+    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if gemini_key:
+        builtins.append(('gemini', gemini_key, 'gemini-2.5-flash'))
+    zhipu_key = os.getenv("ZHIPUAI_API_KEY")
+    if zhipu_key:
+        builtins.append(('zhipuai', zhipu_key, 'glm-4.7-flash'))
+    return builtins
+
+
+# Set of provider IDs that have builtin .env keys
+_BUILTIN_IDS = {pid for pid, _, _ in _get_builtin_providers()}
+
+
+def _get_enabled_providers():
+    """Return list of enabled provider configs in priority order.
+    User-configured providers first, then builtin (.env) providers as fallback."""
+    result = []
+    seen = set()
+    def _make_entry(pid, p):
+        defn = _PROVIDER_DEFS.get(pid, {})
+        if not defn and pid.startswith('custom'):
+            defn = _PROVIDER_DEFS.get('custom', {})
+        name = p.get('custom_name') or defn.get('name', pid)
+        entry = {
+            'id': pid, 'name': name,
+            'api_key': p['api_key'],
+            'model': p.get('model') or defn.get('default_model', ''),
+            'base_url': p.get('base_url') or defn.get('base_url', ''),
+            'format': defn.get('format', 'openai'),
+        }
+        if p.get('temperature') is not None:
+            entry['temperature'] = p['temperature']
+        if p.get('max_tokens') is not None:
+            entry['max_tokens'] = p['max_tokens']
+        return entry
+    # 1) User-configured providers (from ai_config.json)
+    for pid in _ai_config.get('order', []):
+        p = _ai_config['providers'].get(pid)
+        if p and p.get('enabled') and p.get('api_key'):
+            result.append(_make_entry(pid, p))
+            seen.add(pid)
+    for pid, p in _ai_config['providers'].items():
+        if pid not in seen and p.get('enabled') and p.get('api_key'):
+            result.append(_make_entry(pid, p))
+            seen.add(pid)
+    # 2) Builtin providers from .env as fallback (skip if user already configured same provider)
+    for pid, bkey, bmodel in _get_builtin_providers():
+        if pid not in seen:
+            defn = _PROVIDER_DEFS.get(pid, {})
+            result.append({
+                'id': pid, 'name': defn.get('name', pid) + ' (内置)',
+                'api_key': bkey,
+                'model': bmodel,
+                'base_url': defn.get('base_url', ''),
+                'format': defn.get('format', 'openai'),
+            })
+    return result
+
+
+# Initialize provider config on module load
+_load_ai_config()
+_enabled = _get_enabled_providers()
+if _enabled:
+    print(f"AI providers: {', '.join(p['name'] + ' (' + p['model'] + ')' for p in _enabled)}")
 else:
-    print("Warning: Neither GEMINI_API_KEY nor GOOGLE_API_KEY found in environment.")
-    model = None
+    print("Warning: No AI providers configured. Add one in Settings or set API keys in .env")
 
-# Configure ZhipuAI (GLM-4.7-Flash, free model for translation)
-ZHIPUAI_API_KEY = os.getenv("ZHIPUAI_API_KEY")
-_zhipu_client = None
-if ZHIPUAI_API_KEY:
-    _zhipu_client = httpx.AsyncClient(
-        base_url="https://open.bigmodel.cn/api/paas/v4/",
-        headers={"Authorization": f"Bearer {ZHIPUAI_API_KEY}", "Content-Type": "application/json"},
-        timeout=10,
-        trust_env=False,
-    )
-    _zhipu_headers = {"Authorization": f"Bearer {ZHIPUAI_API_KEY}", "Content-Type": "application/json"}
-    print("ZhipuAI configured (GLM-4.7-Flash) for translation.")
-else:
-    print("Warning: ZHIPUAI_API_KEY not found, translation will use Gemini.")
-
-# Google Translate direct API (fast, connection-pooled)
+# Google Translate direct API (fast, connection-pooled, independent of AI providers)
 _gt_client = httpx.AsyncClient(timeout=5, http2=False)
 
-# Model tags appended to streaming responses for frontend display
-_GEMINI_TAG = "\n<!--model:Gemini 3 Flash-->"
-_ZHIPU_TAG = "\n<!--model:GLM-4.7-Flash-->"
 
+# --- Unified AI Dispatch ---
 
-async def _zhipu_chat(prompt: str, temperature: float = 0.7, max_tokens: int = 4096) -> str:
-    """Non-streaming ZhipuAI call, returns full text response."""
-    resp = await _zhipu_client.post("chat/completions", json={
-        "model": "glm-4.7-flash",
+async def _call_openai_compat(base_url, api_key, model, prompt, temperature, max_tokens, extra_body=None):
+    """Non-streaming call to OpenAI-compatible chat/completions endpoint."""
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    body = {
+        "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "thinking": {"type": "disabled"},
-    })
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    }
+    if extra_body:
+        body.update(extra_body)
+    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+        resp = await client.post(f"{base_url.rstrip('/')}/chat/completions", headers=headers, json=body)
+        if resp.status_code != 200:
+            try:
+                err = resp.json().get('error', {})
+                detail = err.get('message', '') if isinstance(err, dict) else str(err)
+            except Exception:
+                detail = resp.text[:200]
+            raise Exception(f"HTTP {resp.status_code}: {detail}")
+        return resp.json()["choices"][0]["message"]["content"]
 
 
-async def _zhipu_stream(prompt: str, temperature: float = 0.7, max_tokens: int = 4096):
-    """Async generator yielding ZhipuAI streaming text chunks. Uses a fresh client to avoid connection pool issues."""
-    try:
-        async with httpx.AsyncClient(timeout=10, trust_env=False) as client:
-            async with client.stream("POST", "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-                headers=_zhipu_headers,
-                json={
-                    "model": "glm-4.7-flash",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": True,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                    "thinking": {"type": "disabled"},
-                },
-            ) as resp:
-                if resp.status_code != 200:
-                    raise Exception(f"ZhipuAI HTTP {resp.status_code}")
-                async for line in resp.aiter_lines():
+async def _call_anthropic(base_url, api_key, model, prompt, temperature, max_tokens):
+    """Non-streaming call to Anthropic Messages API."""
+    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+        resp = await client.post(
+            f"{base_url.rstrip('/')}/messages",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+            json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}], "temperature": temperature},
+        )
+        if resp.status_code != 200:
+            try:
+                err = resp.json().get('error', {})
+                detail = err.get('message', '') if isinstance(err, dict) else str(err)
+            except Exception:
+                detail = resp.text[:200]
+            raise Exception(f"HTTP {resp.status_code}: {detail}")
+        return resp.json()["content"][0]["text"]
+
+
+async def _call_gemini(api_key, model_name, prompt, temperature, max_tokens):
+    """Non-streaming call to Gemini via SDK."""
+    genai.configure(api_key=api_key)
+    m = genai.GenerativeModel(model_name)
+    config = genai.types.GenerationConfig(temperature=temperature, max_output_tokens=max_tokens)
+    response = await asyncio.to_thread(lambda: m.generate_content(prompt, generation_config=config))
+    return response.text.strip()
+
+
+async def _ai_complete(prompt, temperature=0.7, max_tokens=4096, task=None):
+    """Unified non-streaming AI call. Returns (text, display_name). Tries providers in order with fallback."""
+    providers = _get_enabled_providers()
+    if not providers:
+        raise HTTPException(status_code=500, detail="AI not configured — please add a provider in Settings")
+    # Task-specific provider routing
+    routing = _ai_config.get('task_routing', {})
+    routed_pid = routing.get(task) if task else None
+    if routed_pid:
+        routed = [p for p in providers if p['id'] == routed_pid]
+        others = [p for p in providers if p['id'] != routed_pid]
+        providers = routed + others
+    last_error = None
+    for p in providers:
+        try:
+            t = p.get('temperature', temperature)
+            mt = p.get('max_tokens', max_tokens)
+            fmt = p['format']
+            if fmt == 'gemini':
+                text = await _call_gemini(p['api_key'], p['model'], prompt, t, mt)
+            elif fmt == 'anthropic':
+                text = await _call_anthropic(p['base_url'], p['api_key'], p['model'], prompt, t, mt)
+            else:
+                extra = {"thinking": {"type": "disabled"}} if p['id'] == 'zhipuai' else None
+                text = await _call_openai_compat(p['base_url'], p['api_key'], p['model'], prompt, t, mt, extra_body=extra)
+            return text.strip(), f"{p['name']} {p['model']}"
+        except Exception as e:
+            last_error = e
+            print(f"[AI] {p['name']} ({p['model']}) failed: {e}")
+            continue
+    raise HTTPException(status_code=500, detail=f"All AI providers failed. Last error: {last_error}")
+
+
+async def _stream_openai_compat(base_url, api_key, model, prompt, temperature, max_tokens, extra_body=None):
+    """Streaming async generator for OpenAI-compatible endpoint."""
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    body = {"model": model, "messages": [{"role": "user", "content": prompt}], "stream": True, "temperature": temperature, "max_tokens": max_tokens}
+    if extra_body:
+        body.update(extra_body)
+    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+        async with client.stream("POST", f"{base_url.rstrip('/')}/chat/completions", headers=headers, json=body) as resp:
+            if resp.status_code != 200:
+                err = await resp.aread()
+                raise Exception(f"HTTP {resp.status_code}: {err[:300].decode(errors='replace')}")
+            buf = b''
+            async for raw in resp.aiter_bytes():
+                buf += raw
+                while b'\n' in buf:
+                    line_bytes, buf = buf.split(b'\n', 1)
+                    line = line_bytes.decode('utf-8', errors='replace').strip()
                     if not line.startswith("data: "):
                         continue
                     data = line[6:]
                     if data.strip() == "[DONE]":
-                        break
+                        return
                     try:
                         chunk = json.loads(data)
                         content = chunk["choices"][0]["delta"].get("content", "")
@@ -102,15 +270,104 @@ async def _zhipu_stream(prompt: str, temperature: float = 0.7, max_tokens: int =
                             yield content
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
-    except asyncio.CancelledError:
-        return
-    except Exception as e:
-        print(f"[ZhipuAI stream error] {e}")
-        raise
+
+
+async def _stream_anthropic(base_url, api_key, model, prompt, temperature, max_tokens):
+    """Streaming async generator for Anthropic Messages API."""
+    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+        async with client.stream("POST", f"{base_url.rstrip('/')}/messages",
+            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+            json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}], "temperature": temperature, "stream": True},
+        ) as resp:
+            if resp.status_code != 200:
+                err = await resp.aread()
+                raise Exception(f"HTTP {resp.status_code}: {err[:300].decode(errors='replace')}")
+            buf = b''
+            async for raw in resp.aiter_bytes():
+                buf += raw
+                while b'\n' in buf:
+                    line_bytes, buf = buf.split(b'\n', 1)
+                    line = line_bytes.decode('utf-8', errors='replace').strip()
+                    if not line.startswith("data: "):
+                        continue
+                    try:
+                        event = json.loads(line[6:])
+                        if event.get("type") == "content_block_delta":
+                            text = event.get("delta", {}).get("text", "")
+                            if text:
+                                yield text
+                    except (json.JSONDecodeError, KeyError):
+                        continue
+
+
+async def _ai_stream(prompt, temperature=0.7, max_tokens=4096, task=None):
+    """Unified streaming AI. Returns async generator with auto-fallback between providers."""
+    providers = _get_enabled_providers()
+    # Task-specific provider routing
+    routing = _ai_config.get('task_routing', {})
+    routed_pid = routing.get(task) if task else None
+    if routed_pid:
+        routed = [p for p in providers if p['id'] == routed_pid]
+        others = [p for p in providers if p['id'] != routed_pid]
+        providers = routed + others
+
+    async def generate():
+        if not providers:
+            yield "[Error: AI not configured — please add a provider in Settings]"
+            return
+        for i, p in enumerate(providers):
+            try:
+                t = p.get('temperature', temperature)
+                mt = p.get('max_tokens', max_tokens)
+                fmt = p['format']
+                if fmt == 'gemini':
+                    genai.configure(api_key=p['api_key'])
+                    m = genai.GenerativeModel(p['model'])
+                    response = await asyncio.to_thread(
+                        lambda: m.generate_content(prompt, stream=True, generation_config=genai.types.GenerationConfig(temperature=t))
+                    )
+                    for chunk in response:
+                        try:
+                            if chunk.text:
+                                yield chunk.text
+                        except (ValueError, AttributeError):
+                            continue
+                elif fmt == 'anthropic':
+                    async for chunk in _stream_anthropic(p['base_url'], p['api_key'], p['model'], prompt, t, mt):
+                        yield chunk
+                else:
+                    extra = {"thinking": {"type": "disabled"}} if p['id'] == 'zhipuai' else None
+                    async for chunk in _stream_openai_compat(p['base_url'], p['api_key'], p['model'], prompt, t, mt, extra_body=extra):
+                        yield chunk
+                yield f"\n<!--model:{p['name']} {p['model']}-->"
+                return  # Success
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                print(f"[AI stream] {p['name']} ({p['model']}) failed: {e}")
+                if i == len(providers) - 1:
+                    yield f"\n[Error: {e}]"
+                continue
+
+    return generate()
 
 def _detect_cjk_ratio(text):
     cjk = sum(1 for c in text if '\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af')
     return cjk / max(len(text), 1)
+
+_cn_dict_cache: dict[str, str] = {}
+
+async def _chinese_define(word: str) -> str | None:
+    """AI-powered Chinese word definition, with in-memory cache."""
+    if word in _cn_dict_cache:
+        return _cn_dict_cache[word]
+    prompt = f'请用一句话简明解释"{word}"的含义，像词典释义一样简短。只输出释义，不要引号不要前缀。'
+    try:
+        result, _ = await _ai_complete(prompt, temperature=0.1, max_tokens=200, task='dict')
+        _cn_dict_cache[word] = result
+        return result
+    except Exception:
+        return None
 
 async def _google_translate(text, dest='zh-CN'):
     """Direct Google Translate API call, ~100ms with connection reuse."""
@@ -127,12 +384,28 @@ if os.path.exists(_dict_db_path):
     _dict_conn = sqlite3.connect(_dict_db_path, check_same_thread=False)
     _dict_conn.row_factory = sqlite3.Row
 
+# Chinese dictionary (457K entries: xinhua + moedict, <1ms lookup)
+_cn_dict_path = os.path.join(os.path.dirname(__file__), 'dict', 'cn_dict.db')
+_cn_dict_conn = None
+if os.path.exists(_cn_dict_path):
+    _cn_dict_conn = sqlite3.connect(_cn_dict_path, check_same_thread=False)
+    _cn_dict_conn.row_factory = sqlite3.Row
+
+def _reload_dict():
+    """Hot-reload dictionary connections after download."""
+    global _dict_conn, _cn_dict_conn
+    for path, conn_name in [(_dict_db_path, '_dict_conn'), (_cn_dict_path, '_cn_dict_conn')]:
+        if os.path.exists(path) and globals()[conn_name] is None:
+            conn = sqlite3.connect(path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            globals()[conn_name] = conn
+
 def _dict_lookup(word: str) -> dict | None:
     """Look up a word in the local ECDICT dictionary. Returns dict or None."""
     if not _dict_conn:
         return None
     row = _dict_conn.execute(
-        'SELECT word, phonetic, translation, definition FROM stardict WHERE word = ? COLLATE NOCASE',
+        'SELECT word, phonetic, translation, definition FROM dict WHERE word = ? COLLATE NOCASE',
         (word.strip(),)
     ).fetchone()
     if not row or not (row['translation'] or row['definition']):
@@ -142,6 +415,23 @@ def _dict_lookup(word: str) -> dict | None:
         'phonetic': row['phonetic'] or '',
         'translation': (row['translation'] or '').strip(),
         'definition': (row['definition'] or '').strip(),
+    }
+
+def _cn_dict_lookup(word: str) -> dict | None:
+    """Look up a Chinese word in local cn_dict. Returns dict or None."""
+    if not _cn_dict_conn:
+        return None
+    row = _cn_dict_conn.execute(
+        'SELECT word, pinyin, definition, source FROM cn_dict WHERE word = ?',
+        (word.strip(),)
+    ).fetchone()
+    if not row or not row['definition']:
+        return None
+    return {
+        'word': row['word'],
+        'pinyin': row['pinyin'] or '',
+        'definition': row['definition'].strip(),
+        'source': row['source'],
     }
 
 async def _wiki_summary(term: str) -> dict:
@@ -359,9 +649,6 @@ class AIAnalyzeRequest(BaseModel):
 @app.post("/api/ai/analyze")
 async def analyze_chapter(req: AIAnalyzeRequest):
     """Analyze a chapter and return structured insights."""
-    if not _zhipu_client and not model:
-        raise HTTPException(status_code=500, detail="AI not configured")
-
     book = load_book_cached(req.book_id)
     if not book or req.chapter_index < 0 or req.chapter_index >= len(book.spine):
         raise HTTPException(status_code=404, detail="Chapter not found")
@@ -418,16 +705,7 @@ async def analyze_chapter(req: AIAnalyzeRequest):
 }}"""
 
     try:
-        if model:
-            response = await asyncio.to_thread(model.generate_content, prompt)
-            text = response.text.strip()
-            used_model = "Gemini 3 Flash"
-        elif _zhipu_client:
-            text = await _zhipu_chat(prompt, temperature=0.3, max_tokens=8192)
-            text = text.strip()
-            used_model = "GLM-4.7-Flash"
-        else:
-            raise HTTPException(status_code=500, detail="AI not configured")
+        text, used_model = await _ai_complete(prompt, temperature=0.3, max_tokens=8192, task='analyze')
 
         # Robust JSON cleaning
         if "{" in text and "}" in text:
@@ -437,14 +715,14 @@ async def analyze_chapter(req: AIAnalyzeRequest):
         result["_model"] = used_model
         _analysis_cache[cache_key] = result # Cache the processed object
         return result
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: invalid JSON from AI")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @app.post("/api/ai/translate")
 async def translate_text(req: dict):
-    """Translate text using ZhipuAI with Gemini fallback."""
-    if not _zhipu_client and not model:
-        raise HTTPException(status_code=500, detail="AI not configured")
+    """Translate text using unified AI dispatch."""
     text = req.get("text", "")
     if not text:
         return {"translation": ""}
@@ -465,20 +743,15 @@ async def translate_text(req: dict):
 {text}"""
 
     try:
-        if _zhipu_client:
-            result = await _zhipu_chat(prompt, temperature=0.1, max_tokens=4096)
-            return {"translation": result.strip()}
-        response = await asyncio.to_thread(model.generate_content, prompt)
-        return {"translation": response.text.strip()}
+        result, _ = await _ai_complete(prompt, temperature=0.1, max_tokens=4096, task='translate')
+        return {"translation": result.strip()}
     except Exception as e:
         return {"translation": f"[Translation Error: {str(e)}]"}
 
 
 @app.post("/api/ai/translate-stream")
 async def translate_text_stream(req: dict):
-    """Translate text using ZhipuAI GLM-4.7-Flash (free) with Gemini fallback, streaming output."""
-    if not _zhipu_client and not model:
-        raise HTTPException(status_code=500, detail="AI not configured")
+    """Translate text with streaming output using unified AI dispatch."""
     text = req.get("text", "")
     if not text:
         return StreamingResponse(iter([""]), media_type="text/plain")
@@ -506,62 +779,13 @@ async def translate_text_stream(req: dict):
 
     prompt = f"{context}将以下内容完整翻译成{target}，所有词汇都必须翻译，不得保留原文（专有名词首次出现时括号附注原文除外），只返回译文：\n{text}"
 
-    # Prefer ZhipuAI (free), fall back to Gemini
-    if _zhipu_client:
-        async def generate_with_fallback():
-            try:
-                async for chunk in _zhipu_stream(prompt, temperature=0.1, max_tokens=4096):
-                    yield chunk
-                yield _ZHIPU_TAG
-                return
-            except Exception as e:
-                print(f"[translate-stream] ZhipuAI failed ({e}), falling back to Gemini")
-            if model:
-                try:
-                    response = model.generate_content(
-                        prompt, stream=True,
-                        generation_config=genai.types.GenerationConfig(temperature=0.1),
-                    )
-                    for chunk in response:
-                        try:
-                            if chunk.text:
-                                yield chunk.text
-                        except (ValueError, AttributeError):
-                            continue
-                    yield _GEMINI_TAG
-                except Exception as e2:
-                    yield f"[Translation Error: {str(e2)}]"
-            else:
-                yield f"[Translation Error: AI not available]"
-
-        return StreamingResponse(generate_with_fallback(), media_type="text/plain; charset=utf-8")
-
-    # Gemini fallback
-    def generate_gemini():
-        try:
-            response = model.generate_content(
-                prompt,
-                stream=True,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.1,
-                ),
-            )
-            for chunk in response:
-                try:
-                    if chunk.text:
-                        yield chunk.text
-                except (ValueError, AttributeError):
-                    continue
-            yield _GEMINI_TAG
-        except Exception as e:
-            yield f"[Translation Error: {str(e)}]"
-
-    return StreamingResponse(generate_gemini(), media_type="text/plain; charset=utf-8")
+    gen = await _ai_stream(prompt, temperature=0.1, max_tokens=4096, task='translate')
+    return StreamingResponse(gen, media_type="text/plain; charset=utf-8")
 
 
 @app.post("/api/quick-translate")
 async def quick_translate(req: dict):
-    """Dict lookup (instant) → Google Translate fallback (~100ms)."""
+    """Dict lookup (instant) → Google Translate fallback (~100ms). Chinese words get AI definitions."""
     text = (req.get("text") or "").strip()
     if not text:
         return {"translation": ""}
@@ -577,8 +801,25 @@ async def quick_translate(req: dict):
             "definition": dict_result['definition'],
         }
 
-    # Step 2: Fallback to Google Translate
+    # Step 2: Chinese text → local Chinese dictionary (457K entries, <1ms)
     is_cjk = _detect_cjk_ratio(text) > 0.3
+    if is_cjk:
+        cn_result = _cn_dict_lookup(text)
+        if cn_result:
+            return {
+                "source": "cn-dict",
+                "word": cn_result['word'],
+                "pinyin": cn_result['pinyin'],
+                "translation": cn_result['definition'],
+            }
+
+    # Step 3: Chinese text → AI definition (fallback for words not in local dict)
+    if is_cjk and len(text) <= 20:
+        defn = await _chinese_define(text)
+        if defn:
+            return {"source": "ai-dict", "word": text, "translation": defn}
+
+    # Step 4: Fallback to Google Translate
     dest = 'en' if is_cjk else 'zh-CN'
     try:
         translation = await _google_translate(text, dest)
@@ -640,9 +881,6 @@ class AIChatRequest(BaseModel):
 @app.post("/api/ai/chat")
 async def chat_about_chapter(req: AIChatRequest):
     """Answer a free-form question about the current chapter."""
-    if not _zhipu_client and not model:
-        raise HTTPException(status_code=500, detail="AI not configured")
-
     book = load_book_cached(req.book_id)
     if not book or req.chapter_index < 0 or req.chapter_index >= len(book.spine):
         raise HTTPException(status_code=404, detail="Chapter not found")
@@ -679,38 +917,318 @@ async def chat_about_chapter(req: AIChatRequest):
 {req.question}"""
 
     try:
-        if model:
-            def generate_gemini():
-                try:
-                    response = model.generate_content(
-                        prompt,
-                        stream=True,
-                        generation_config=genai.types.GenerationConfig(temperature=0.7),
-                    )
-                    for chunk in response:
-                        try:
-                            if chunk.text:
-                                yield chunk.text
-                        except (ValueError, AttributeError):
-                            continue
-                    yield _GEMINI_TAG
-                except Exception as e:
-                    yield f"\n[Error: {str(e)}]"
-
-            return StreamingResponse(generate_gemini(), media_type="text/plain; charset=utf-8")
-
-        if _zhipu_client:
-            async def generate_zhipu():
-                try:
-                    async for chunk in _zhipu_stream(prompt, temperature=0.7, max_tokens=4096):
-                        yield chunk
-                    yield _ZHIPU_TAG
-                except Exception as e:
-                    yield f"\n[Error: {str(e)}]"
-
-            return StreamingResponse(generate_zhipu(), media_type="text/plain; charset=utf-8")
+        gen = await _ai_stream(prompt, temperature=0.7, max_tokens=4096, task='chat')
+        return StreamingResponse(gen, media_type="text/plain; charset=utf-8")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+
+# --- AI Provider Management API ---
+
+@app.get("/api/ai/providers")
+async def get_providers():
+    """Return provider list with status (key masked)."""
+    _load_ai_config()
+    result = []
+    seen = set()
+    def _entry(pid, p):
+        defn = _PROVIDER_DEFS.get(pid, {})
+        if not defn and pid.startswith('custom'):
+            defn = _PROVIDER_DEFS.get('custom', {})
+        key = p.get('api_key', '')
+        name = p.get('custom_name') or defn.get('name', pid)
+        entry = {
+            'id': pid, 'name': name,
+            'has_key': bool(key), 'key_preview': key[:3] + '******' + key[-3:] if len(key) > 6 else ('******' if key else ''),
+            'enabled': p.get('enabled', False),
+            'model': p.get('model') or defn.get('default_model', ''),
+            'base_url': p.get('base_url', ''),
+            'default_model': defn.get('default_model', ''),
+            'default_base_url': defn.get('base_url', ''),
+        }
+        if p.get('temperature') is not None:
+            entry['temperature'] = p['temperature']
+        if p.get('max_tokens') is not None:
+            entry['max_tokens'] = p['max_tokens']
+        if pid.startswith('custom'):
+            entry['custom_name'] = p.get('custom_name', '')
+        return entry
+    # Build map of builtin keys for filtering migrated entries
+    builtin_keys = {pid: bkey for pid, bkey, _ in _get_builtin_providers()}
+    for pid in _ai_config.get('order', []):
+        if pid in _ai_config.get('providers', {}):
+            p = _ai_config['providers'][pid]
+            # Skip entries whose key matches a builtin .env key (legacy migration artifacts)
+            if pid in builtin_keys and p.get('api_key') == builtin_keys[pid]:
+                continue
+            seen.add(pid)
+            result.append(_entry(pid, p))
+    for pid, p in _ai_config.get('providers', {}).items():
+        if pid not in seen:
+            if pid in builtin_keys and p.get('api_key') == builtin_keys[pid]:
+                continue
+            result.append(_entry(pid, p))
+    return {"providers": result, "available": list(_PROVIDER_DEFS.keys()), "task_routing": _ai_config.get('task_routing', {})}
+
+
+@app.post("/api/ai/providers")
+async def save_providers(req: dict):
+    """Save provider configuration. Empty api_key = keep existing key."""
+    providers = req.get('providers', [])
+    old_providers = _ai_config.get('providers', {})
+    _ai_config['providers'] = {}
+    _ai_config['order'] = []
+    for p in providers:
+        pid = p.get('id', '')
+        if not pid:
+            continue
+        _ai_config['order'].append(pid)
+        new_key = p.get('api_key', '')
+        # If no new key provided, keep the old one
+        if not new_key and pid in old_providers:
+            new_key = old_providers[pid].get('api_key', '')
+        _ai_config['providers'][pid] = {
+            'api_key': new_key,
+            'enabled': p.get('enabled', False),
+            'model': p.get('model', ''),
+            'base_url': p.get('base_url', ''),
+        }
+        if pid.startswith('custom') and p.get('custom_name'):
+            _ai_config['providers'][pid]['custom_name'] = p['custom_name']
+        if p.get('temperature') is not None:
+            _ai_config['providers'][pid]['temperature'] = p['temperature']
+        if p.get('max_tokens') is not None:
+            _ai_config['providers'][pid]['max_tokens'] = p['max_tokens']
+    # Save task routing if provided
+    if 'task_routing' in req:
+        _ai_config['task_routing'] = req['task_routing']
+    _save_ai_config()
+    _load_ai_config()
+    return {"ok": True}
+
+
+@app.post("/api/ai/test-provider")
+async def test_provider(req: dict):
+    """Test a provider's API key by making a minimal request."""
+    pid = req.get('id', '')
+    api_key = req.get('api_key', '')
+    model_name = req.get('model', '')
+    base_url = req.get('base_url', '')
+    defn = _PROVIDER_DEFS.get(pid, {})
+    if not defn and pid.startswith('custom'):
+        defn = _PROVIDER_DEFS.get('custom', {})
+    fmt = defn.get('format', 'openai')
+    # Fallback to stored key if not provided
+    if not api_key and pid in _ai_config.get('providers', {}):
+        api_key = _ai_config['providers'][pid].get('api_key', '')
+    if not api_key:
+        return {"ok": False, "message": "No API key provided"}
+    if not base_url:
+        base_url = defn.get('base_url', '')
+    if not base_url:
+        return {"ok": False, "message": "No base URL configured"}
+    if not model_name:
+        model_name = defn.get('default_model', '')
+    def _extract_error(resp):
+        """Extract human-readable error from API response."""
+        try:
+            body = resp.json()
+            # OpenAI / DashScope / most providers: {"error": {"message": "..."}}
+            err = body.get('error') or body.get('errors') or {}
+            if isinstance(err, dict):
+                msg = err.get('message', '')
+                code = err.get('code', '')
+                return f"{code}: {msg}" if code else msg
+            if isinstance(err, str):
+                return err
+            return str(body)[:200]
+        except Exception:
+            return resp.text[:200] if hasattr(resp, 'text') else f"HTTP {resp.status_code}"
+
+    try:
+        if fmt == 'gemini':
+            genai.configure(api_key=api_key)
+            m = genai.GenerativeModel(model_name)
+            resp = await asyncio.to_thread(m.generate_content, "Say 'ok'")
+            return {"ok": True, "message": f"Connected: {model_name}"}
+        elif fmt == 'anthropic':
+            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+                resp = await client.post(
+                    f"{base_url.rstrip('/')}/messages",
+                    headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+                    json={"model": model_name, "max_tokens": 10, "messages": [{"role": "user", "content": "Say ok"}]},
+                )
+                if resp.status_code != 200:
+                    return {"ok": False, "message": _extract_error(resp)}
+                return {"ok": True, "message": f"Connected: {model_name}"}
+        else:
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            body = {"model": model_name, "messages": [{"role": "user", "content": "Say ok"}], "max_tokens": 10}
+            if pid == 'zhipuai':
+                body["thinking"] = {"type": "disabled"}
+            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+                resp = await client.post(f"{base_url.rstrip('/')}/chat/completions", headers=headers, json=body)
+                if resp.status_code != 200:
+                    return {"ok": False, "message": _extract_error(resp)}
+                return {"ok": True, "message": f"Connected: {model_name}"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
+@app.get("/api/ai/export-config")
+async def export_config():
+    """Export AI provider config as downloadable JSON file."""
+    _load_ai_config()
+    from fastapi.responses import Response
+    content = json.dumps(_ai_config, indent=2, ensure_ascii=False)
+    return Response(content=content, media_type="application/json",
+                    headers={"Content-Disposition": "attachment; filename=ai_config.json"})
+
+
+@app.post("/api/ai/import-config")
+async def import_config(req: dict):
+    """Import AI provider config from uploaded JSON."""
+    if 'providers' not in req or not isinstance(req['providers'], dict):
+        raise HTTPException(status_code=400, detail="Invalid config: missing 'providers' object")
+    global _ai_config
+    _ai_config = req
+    _ai_config.setdefault('order', list(req['providers'].keys()))
+    _ai_config.setdefault('task_routing', {})
+    _save_ai_config()
+    _load_ai_config()
+    return {"ok": True, "count": len(_ai_config['providers'])}
+
+
+@app.post("/api/ai/fetch-models")
+async def fetch_models(req: dict):
+    """Fetch available models from a provider."""
+    pid = req.get('id', '')
+    api_key = req.get('api_key', '')
+    base_url = req.get('base_url', '')
+    defn = _PROVIDER_DEFS.get(pid, {})
+    if not defn and pid.startswith('custom'):
+        defn = _PROVIDER_DEFS.get('custom', {})
+    fmt = defn.get('format', 'openai')
+    # Fallback to stored key if not provided
+    if not api_key and pid in _ai_config.get('providers', {}):
+        api_key = _ai_config['providers'][pid].get('api_key', '')
+    if not api_key:
+        return {"models": [], "error": "No API key provided"}
+    if not base_url:
+        base_url = defn.get('base_url', '')
+    if not base_url:
+        return {"models": [], "error": "No base URL configured"}
+
+    try:
+        if fmt == 'gemini':
+            genai.configure(api_key=api_key)
+            models = await asyncio.to_thread(lambda: [m.name.replace('models/', '') for m in genai.list_models() if 'generateContent' in (m.supported_generation_methods or [])])
+            return {"models": models}
+        elif fmt == 'anthropic':
+            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+                resp = await client.get(f"{base_url.rstrip('/')}/models", headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"})
+                resp.raise_for_status()
+                data = resp.json()
+                models = [m['id'] for m in data.get('data', [])]
+                return {"models": models}
+        else:
+            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+                resp = await client.get(f"{base_url.rstrip('/')}/models", headers={"Authorization": f"Bearer {api_key}"})
+                resp.raise_for_status()
+                data = resp.json()
+                # Handle both {"data": [...]} (OpenAI) and [...] (Together AI) formats
+                items = data.get('data', data) if isinstance(data, dict) else data
+                models = [m['id'] for m in items if isinstance(m, dict) and 'id' in m]
+                return {"models": sorted(models)}
+    except Exception as e:
+        return {"models": [], "error": str(e)}
+
+
+# --- Dictionary Management API ---
+
+@app.get("/api/dict/status")
+async def dict_status():
+    """Return dictionary install status and download URL availability."""
+    dict_url = _ai_config.get('dict_url', '').strip() or _DEFAULT_DICT_URL
+    items = {}
+    for did, info in _DICT_FILES.items():
+        path = os.path.join(_DICT_DIR, info['filename'])
+        exists = os.path.exists(path)
+        items[did] = {
+            'label': info['label'], 'label_en': info['label_en'],
+            'installed': exists,
+            'size_mb': round(os.path.getsize(path) / 1048576) if exists else info['size_mb'],
+            'gz_mb': info['gz_mb'],
+        }
+    return {'dicts': items, 'has_url': bool(dict_url)}
+
+
+_dict_downloading = set()  # prevent concurrent downloads
+
+@app.post("/api/dict/download")
+async def download_dict(req: dict):
+    """Download and decompress a dictionary file. Streams SSE progress."""
+    dict_id = req.get('id', '')
+    info = _DICT_FILES.get(dict_id)
+    if not info:
+        raise HTTPException(status_code=400, detail="Unknown dictionary id")
+    if dict_id in _dict_downloading:
+        raise HTTPException(status_code=409, detail="Already downloading")
+    dict_url = _ai_config.get('dict_url', '').strip() or _DEFAULT_DICT_URL
+    gz_url = f"{dict_url.rstrip('/')}/{info['filename']}.gz"
+    dest = os.path.join(_DICT_DIR, info['filename'])
+    tmp = dest + '.tmp'
+    expected_gz = info['gz_mb'] * 1048576  # fallback total size
+
+    async def stream():
+        _dict_downloading.add(dict_id)
+        try:
+            import urllib.request
+            os.makedirs(_DICT_DIR, exist_ok=True)
+            decomp = zlib.decompressobj(16 + zlib.MAX_WBITS)
+
+            def _download():
+                proxy = urllib.request.ProxyHandler({
+                    'http': 'http://127.0.0.1:8118',
+                    'https': 'http://127.0.0.1:8118',
+                })
+                opener = urllib.request.build_opener(proxy)
+                req = urllib.request.Request(gz_url, headers={'User-Agent': 'Reader3/1.0'})
+                return opener.open(req, timeout=300)
+
+            resp = await asyncio.to_thread(_download)
+            total = int(resp.headers.get('Content-Length', 0)) or expected_gz
+            downloaded = 0
+            last_pct = -1
+            with open(tmp, 'wb') as f:
+                while True:
+                    chunk = await asyncio.to_thread(resp.read, 65536)
+                    if not chunk:
+                        break
+                    decompressed = decomp.decompress(chunk)
+                    f.write(decompressed)
+                    downloaded += len(chunk)
+                    pct = min(int(downloaded * 100 / total), 99) if total else 0
+                    if pct > last_pct:
+                        last_pct = pct
+                        yield f"data: {json.dumps({'progress': pct})}\n\n"
+                remaining = decomp.flush()
+                if remaining:
+                    f.write(remaining)
+            if os.path.exists(tmp):
+                os.replace(tmp, dest)
+                _reload_dict()
+                yield f"data: {json.dumps({'done': True})}\n\n"
+            else:
+                yield f"data: {json.dumps({'error': 'Download failed: temp file missing'})}\n\n"
+        except Exception as e:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            _dict_downloading.discard(dict_id)
+
+    return StreamingResponse(stream(), media_type='text/event-stream')
 
 
 # --- TTS MODULE: edge-tts (local, free, low latency) ---
@@ -819,7 +1337,14 @@ async def import_local_epub(req: dict):
     import shutil
     epub_copy = os.path.join(out_dir, "source.epub")
     if not os.path.exists(epub_copy):
-        shutil.copy2(path, epub_copy)
+        try:
+            shutil.copy2(path, epub_copy)
+        except (OSError, PermissionError):
+            # Apple Books sandbox may block metadata copy; fallback to content-only copy
+            try:
+                shutil.copy(path, epub_copy)
+            except Exception:
+                pass  # Non-critical: source.epub is only for reprocessing
 
     load_book_cached.cache_clear()
 
@@ -982,4 +1507,4 @@ async def set_cover_from_url(book_id: str, req: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8123)
+    uvicorn.run(app, host="127.0.0.1", port=8123)
