@@ -4,6 +4,9 @@
 # TTS cache
 .tts_cache/
 
+# Library metadata cache
+.library_index.json
+
 # EPUB source files
 *.epub
 
