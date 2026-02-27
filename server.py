@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import edge_tts
@@ -155,6 +156,9 @@ else:
 # Google Translate direct API (fast, connection-pooled, independent of AI providers)
 _gt_client = httpx.AsyncClient(timeout=5, http2=False)
 
+# Shared httpx pool for AI provider calls (reuse TCP/TLS connections)
+_ai_client = httpx.AsyncClient(timeout=60, trust_env=False)
+
 
 # --- Unified AI Dispatch ---
 
@@ -169,34 +173,32 @@ async def _call_openai_compat(base_url, api_key, model, prompt, temperature, max
     }
     if extra_body:
         body.update(extra_body)
-    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
-        resp = await client.post(f"{base_url.rstrip('/')}/chat/completions", headers=headers, json=body)
-        if resp.status_code != 200:
-            try:
-                err = resp.json().get('error', {})
-                detail = err.get('message', '') if isinstance(err, dict) else str(err)
-            except Exception:
-                detail = resp.text[:200]
-            raise Exception(f"HTTP {resp.status_code}: {detail}")
-        return resp.json()["choices"][0]["message"]["content"]
+    resp = await _ai_client.post(f"{base_url.rstrip('/')}/chat/completions", headers=headers, json=body)
+    if resp.status_code != 200:
+        try:
+            err = resp.json().get('error', {})
+            detail = err.get('message', '') if isinstance(err, dict) else str(err)
+        except Exception:
+            detail = resp.text[:200]
+        raise Exception(f"HTTP {resp.status_code}: {detail}")
+    return resp.json()["choices"][0]["message"]["content"]
 
 
 async def _call_anthropic(base_url, api_key, model, prompt, temperature, max_tokens):
     """Non-streaming call to Anthropic Messages API."""
-    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
-        resp = await client.post(
-            f"{base_url.rstrip('/')}/messages",
-            headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
-            json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}], "temperature": temperature},
-        )
-        if resp.status_code != 200:
-            try:
-                err = resp.json().get('error', {})
-                detail = err.get('message', '') if isinstance(err, dict) else str(err)
-            except Exception:
-                detail = resp.text[:200]
-            raise Exception(f"HTTP {resp.status_code}: {detail}")
-        return resp.json()["content"][0]["text"]
+    resp = await _ai_client.post(
+        f"{base_url.rstrip('/')}/messages",
+        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+        json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}], "temperature": temperature},
+    )
+    if resp.status_code != 200:
+        try:
+            err = resp.json().get('error', {})
+            detail = err.get('message', '') if isinstance(err, dict) else str(err)
+        except Exception:
+            detail = resp.text[:200]
+        raise Exception(f"HTTP {resp.status_code}: {detail}")
+    return resp.json()["content"][0]["text"]
 
 
 async def _call_gemini(api_key, model_name, prompt, temperature, max_tokens):
@@ -377,28 +379,33 @@ async def _google_translate(text, dest='zh-CN'):
     data = resp.json()
     return ''.join(s[0] for s in data[0] if s[0])
 
+def _open_dict_db(path):
+    """Open a dict SQLite DB with read-optimized settings."""
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA mmap_size=67108864')  # 64MB mmap for faster reads
+    conn.execute('PRAGMA cache_size=-8000')     # 8MB page cache
+    return conn
+
 # ECDICT offline dictionary (~3.4M entries, <1ms lookup)
 _dict_db_path = os.path.join(os.path.dirname(__file__), 'dict', 'stardict.db')
 _dict_conn = None
 if os.path.exists(_dict_db_path):
-    _dict_conn = sqlite3.connect(_dict_db_path, check_same_thread=False)
-    _dict_conn.row_factory = sqlite3.Row
+    _dict_conn = _open_dict_db(_dict_db_path)
 
 # Chinese dictionary (457K entries: xinhua + moedict, <1ms lookup)
 _cn_dict_path = os.path.join(os.path.dirname(__file__), 'dict', 'cn_dict.db')
 _cn_dict_conn = None
 if os.path.exists(_cn_dict_path):
-    _cn_dict_conn = sqlite3.connect(_cn_dict_path, check_same_thread=False)
-    _cn_dict_conn.row_factory = sqlite3.Row
+    _cn_dict_conn = _open_dict_db(_cn_dict_path)
 
 def _reload_dict():
     """Hot-reload dictionary connections after download."""
     global _dict_conn, _cn_dict_conn
     for path, conn_name in [(_dict_db_path, '_dict_conn'), (_cn_dict_path, '_cn_dict_conn')]:
         if os.path.exists(path) and globals()[conn_name] is None:
-            conn = sqlite3.connect(path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            globals()[conn_name] = conn
+            globals()[conn_name] = _open_dict_db(path)
 
 def _dict_lookup(word: str) -> dict | None:
     """Look up a word in the local ECDICT dictionary. Returns dict or None."""
@@ -455,11 +462,26 @@ async def _wiki_summary(term: str) -> dict:
     except Exception:
         return {}
 
+import re as _re
+
+def _safe_dirname(title: str, authors: list[str] = None) -> str:
+    """Sanitize book title + author for use as directory name."""
+    name = _re.sub(r'[\\/:*?"<>|]', '', title).strip()
+    name = _re.sub(r'\s+', ' ', name)
+    if authors and authors[0]:
+        author = _re.sub(r'[\\/:*?"<>|]', '', authors[0]).strip()
+        if author:
+            name = f"{name} - {author}"
+    if len(name) > 80:
+        name = name[:80].rstrip()
+    return name or 'untitled'
+
 app = FastAPI()
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # gzip responses > 1KB
 templates = Jinja2Templates(directory="templates")
 
 # Where are the book folders located?
-BOOKS_DIR = "."
+BOOKS_DIR = os.path.join(os.path.dirname(__file__), "books")
 
 # TTS audio cache directory
 TTS_CACHE_DIR = os.path.join(BOOKS_DIR, ".tts_cache")
@@ -484,21 +506,65 @@ def load_book_cached(folder_name: str) -> Optional[Book]:
     except Exception:
         return None
 
+# --- Library metadata index (avoid full pickle load for listing) ---
+_LIBRARY_INDEX = os.path.join(BOOKS_DIR, ".library_index.json")
+
+def _build_library_index():
+    """Scan books dir, build/update lightweight metadata index."""
+    index = {}
+    if os.path.exists(_LIBRARY_INDEX):
+        try:
+            with open(_LIBRARY_INDEX, 'r') as f:
+                index = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    changed = False
+    current_dirs = set()
+    if not os.path.exists(BOOKS_DIR):
+        return index
+    for item in os.listdir(BOOKS_DIR):
+        if not item.endswith("_data") or not os.path.isdir(os.path.join(BOOKS_DIR, item)):
+            continue
+        current_dirs.add(item)
+        pkl_path = os.path.join(BOOKS_DIR, item, "book.pkl")
+        if not os.path.exists(pkl_path):
+            continue
+        pkl_mtime = os.path.getmtime(pkl_path)
+        if item in index and index[item].get('_mtime') == pkl_mtime:
+            continue  # unchanged
+        book = load_book_cached(item)
+        if book:
+            index[item] = {
+                'title': book.metadata.title,
+                'author': ', '.join(book.metadata.authors) if book.metadata.authors else '',
+                'chapters': len(book.spine),
+                'language': book.metadata.language or 'en',
+                '_mtime': pkl_mtime,
+            }
+            changed = True
+    # Remove deleted books from index
+    for key in list(index.keys()):
+        if key not in current_dirs:
+            del index[key]
+            changed = True
+    if changed:
+        with open(_LIBRARY_INDEX, 'w') as f:
+            json.dump(index, f, ensure_ascii=False)
+    return index
+
 @app.get("/", response_class=HTMLResponse)
 async def library_view(request: Request):
+    index = await asyncio.to_thread(_build_library_index)
     books = []
-    if os.path.exists(BOOKS_DIR):
-        for item in sorted(os.listdir(BOOKS_DIR)):
-            if item.endswith("_data") and os.path.isdir(item):
-                book = load_book_cached(item)
-                if book:
-                    books.append({
-                        "id": item,
-                        "title": book.metadata.title,
-                        "author": ", ".join(book.metadata.authors),
-                        "chapters": len(book.spine),
-                        "language": book.metadata.language or "en",
-                    })
+    for item in sorted(index.keys()):
+        meta = index[item]
+        books.append({
+            "id": item,
+            "title": meta['title'],
+            "author": meta['author'],
+            "chapters": meta['chapters'],
+            "language": meta['language'],
+        })
     return templates.TemplateResponse("library.html", {"request": request, "books": books})
 
 
@@ -1188,12 +1254,15 @@ async def download_dict(req: dict):
             decomp = zlib.decompressobj(16 + zlib.MAX_WBITS)
 
             def _download():
-                proxy = urllib.request.ProxyHandler({
-                    'http': 'http://127.0.0.1:8118',
-                    'https': 'http://127.0.0.1:8118',
-                })
-                opener = urllib.request.build_opener(proxy)
                 req = urllib.request.Request(gz_url, headers={'User-Agent': 'Reader3/1.0'})
+                proxy_url = _ai_config.get('proxy', '').strip()
+                if proxy_url:
+                    handler = urllib.request.ProxyHandler({
+                        'http': proxy_url, 'https': proxy_url,
+                    })
+                    opener = urllib.request.build_opener(handler)
+                else:
+                    opener = urllib.request.build_opener()  # respects env http_proxy
                 return opener.open(req, timeout=300)
 
             resp = await asyncio.to_thread(_download)
@@ -1279,6 +1348,12 @@ async def list_apple_books():
         base_name = os.path.splitext(os.path.basename(path))[0]
         book_id = base_name + "_data"
         already_imported = os.path.exists(os.path.join(BOOKS_DIR, book_id, "book.pkl"))
+        # Also check title-based directory (import renames to title - author)
+        if not already_imported:
+            title_name = _safe_dirname(r['ZTITLE'], [r['ZAUTHOR']] if r['ZAUTHOR'] else None)
+            title_id = title_name + "_data"
+            if title_id != book_id:
+                already_imported = os.path.exists(os.path.join(BOOKS_DIR, title_id, "book.pkl"))
         books.append({
             "title": r['ZTITLE'],
             "author": r['ZAUTHOR'] or '',
@@ -1333,8 +1408,16 @@ async def import_local_epub(req: dict):
     book_obj = await asyncio.to_thread(process_epub, path, out_dir)
     await asyncio.to_thread(save_to_pickle, book_obj, out_dir)
 
-    # Keep a copy of the epub for future reprocessing
+    # Rename directory to book title if different from filename
     import shutil
+    title_name = _safe_dirname(book_obj.metadata.title, book_obj.metadata.authors)
+    title_dir = os.path.join(BOOKS_DIR, title_name + "_data")
+    if title_name and title_dir != out_dir and not os.path.exists(title_dir):
+        os.rename(out_dir, title_dir)
+        out_dir = title_dir
+    book_id = os.path.basename(out_dir)
+
+    # Keep a copy of the epub for future reprocessing
     epub_copy = os.path.join(out_dir, "source.epub")
     if not os.path.exists(epub_copy):
         try:
@@ -1350,10 +1433,10 @@ async def import_local_epub(req: dict):
 
     return {
         "success": True,
-        "book_id": base_name + "_data",
+        "book_id": book_id,
         "title": book_obj.metadata.title,
         "chapters": len(book_obj.spine),
-        "has_cover": _find_cover_image(base_name + "_data") is not None,
+        "has_cover": _find_cover_image(book_id) is not None,
     }
 
 
@@ -1378,6 +1461,14 @@ async def upload_epub(file: UploadFile = File(...)):
         book_obj = await asyncio.to_thread(process_epub, tmp_path, out_dir)
         await asyncio.to_thread(save_to_pickle, book_obj, out_dir)
 
+        # Rename directory to book title if different from filename
+        title_name = _safe_dirname(book_obj.metadata.title, book_obj.metadata.authors)
+        title_dir = os.path.join(BOOKS_DIR, title_name + "_data")
+        if title_name and title_dir != out_dir and not os.path.exists(title_dir):
+            os.rename(out_dir, title_dir)
+            out_dir = title_dir
+        book_id = os.path.basename(out_dir)
+
         # Keep a copy of the epub for future reprocessing
         import shutil
         shutil.copy2(tmp_path, os.path.join(out_dir, "source.epub"))
@@ -1387,10 +1478,10 @@ async def upload_epub(file: UploadFile = File(...)):
 
         return {
             "success": True,
-            "book_id": base_name + "_data",
+            "book_id": book_id,
             "title": book_obj.metadata.title,
             "chapters": len(book_obj.spine),
-            "has_cover": _find_cover_image(base_name + "_data") is not None,
+            "has_cover": _find_cover_image(book_id) is not None,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process EPUB: {str(e)}")
@@ -1407,9 +1498,11 @@ async def reprocess_book(book_id: str):
     if not os.path.exists(source_epub):
         raise HTTPException(status_code=400, detail="No source epub found. Please re-upload the book.")
 
-    # Copy source.epub to temp so process_epub can rmtree the output dir
+    # Copy source.epub to a temp file OUTSIDE book_dir,
+    # because process_epub will rmtree the entire book_dir
     import shutil
-    tmp_epub = source_epub + ".tmp"
+    tmp_fd, tmp_epub = tempfile.mkstemp(suffix='.epub')
+    os.close(tmp_fd)
     shutil.copy2(source_epub, tmp_epub)
 
     try:
