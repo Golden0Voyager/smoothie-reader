@@ -154,10 +154,10 @@ else:
     print("Warning: No AI providers configured. Add one in Settings or set API keys in .env")
 
 # Google Translate direct API (fast, connection-pooled, independent of AI providers)
-_gt_client = httpx.AsyncClient(timeout=5, http2=False)
+_gt_client = httpx.AsyncClient(timeout=5, http2=False, headers={"User-Agent": "Reader3/1.0"})
 
 # Shared httpx pool for AI provider calls (reuse TCP/TLS connections)
-_ai_client = httpx.AsyncClient(timeout=60, trust_env=False)
+_ai_client = httpx.AsyncClient(timeout=60, trust_env=True, headers={"User-Agent": "Reader3/1.0"})
 
 
 # --- Unified AI Dispatch ---
@@ -249,7 +249,7 @@ async def _stream_openai_compat(base_url, api_key, model, prompt, temperature, m
     body = {"model": model, "messages": [{"role": "user", "content": prompt}], "stream": True, "temperature": temperature, "max_tokens": max_tokens}
     if extra_body:
         body.update(extra_body)
-    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+    async with httpx.AsyncClient(timeout=60, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
         async with client.stream("POST", f"{base_url.rstrip('/')}/chat/completions", headers=headers, json=body) as resp:
             if resp.status_code != 200:
                 err = await resp.aread()
@@ -276,7 +276,7 @@ async def _stream_openai_compat(base_url, api_key, model, prompt, temperature, m
 
 async def _stream_anthropic(base_url, api_key, model, prompt, temperature, max_tokens):
     """Streaming async generator for Anthropic Messages API."""
-    async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+    async with httpx.AsyncClient(timeout=60, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
         async with client.stream("POST", f"{base_url.rstrip('/')}/messages",
             headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
             json={"model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}], "temperature": temperature, "stream": True},
@@ -476,6 +476,51 @@ def _safe_dirname(title: str, authors: list[str] = None) -> str:
         name = name[:80].rstrip()
     return name or 'untitled'
 
+
+def _process_pdf(pdf_path: str, out_dir: str) -> dict:
+    """Process a PDF file: extract metadata, render cover from first page, copy PDF."""
+    import fitz  # PyMuPDF
+    import shutil
+
+    os.makedirs(out_dir, exist_ok=True)
+    images_dir = os.path.join(out_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+
+    doc = fitz.open(pdf_path)
+    meta = doc.metadata or {}
+    title = meta.get("title", "").strip() or os.path.splitext(os.path.basename(pdf_path))[0]
+    author = meta.get("author", "").strip()
+    page_count = len(doc)
+
+    # Render first page as cover
+    if page_count > 0:
+        page = doc[0]
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for quality
+        cover_path = os.path.join(images_dir, "cover.png")
+        pix.save(cover_path)
+        with open(os.path.join(out_dir, "cover_image.txt"), "w") as f:
+            f.write("cover.png")
+
+    doc.close()
+
+    # Copy PDF to output dir
+    dest_pdf = os.path.join(out_dir, "book.pdf")
+    if os.path.abspath(pdf_path) != os.path.abspath(dest_pdf):
+        shutil.copy2(pdf_path, dest_pdf)
+
+    # Write meta.json
+    meta_info = {
+        "title": title,
+        "author": author,
+        "pages": page_count,
+        "format": "pdf",
+    }
+    with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as f:
+        json.dump(meta_info, f, ensure_ascii=False)
+
+    return meta_info
+
+
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)  # gzip responses > 1KB
 templates = Jinja2Templates(directory="templates")
@@ -526,22 +571,50 @@ def _build_library_index():
         if not item.endswith("_data") or not os.path.isdir(os.path.join(BOOKS_DIR, item)):
             continue
         current_dirs.add(item)
+        # Check for PDF (meta.json) or EPUB (book.pkl)
+        meta_json_path = os.path.join(BOOKS_DIR, item, "meta.json")
         pkl_path = os.path.join(BOOKS_DIR, item, "book.pkl")
-        if not os.path.exists(pkl_path):
-            continue
-        pkl_mtime = os.path.getmtime(pkl_path)
-        if item in index and index[item].get('_mtime') == pkl_mtime:
-            continue  # unchanged
-        book = load_book_cached(item)
-        if book:
-            index[item] = {
-                'title': book.metadata.title,
-                'author': ', '.join(book.metadata.authors) if book.metadata.authors else '',
-                'chapters': len(book.spine),
-                'language': book.metadata.language or 'en',
-                '_mtime': pkl_mtime,
-            }
-            changed = True
+        if os.path.exists(meta_json_path):
+            # PDF book
+            meta_mtime = os.path.getmtime(meta_json_path)
+            if item in index and index[item].get('_mtime') == meta_mtime:
+                continue
+            try:
+                with open(meta_json_path, 'r', encoding='utf-8') as f:
+                    pdf_meta = json.load(f)
+                old_display_title = index.get(item, {}).get('display_title')
+                index[item] = {
+                    'title': pdf_meta.get('title', 'Untitled'),
+                    'author': pdf_meta.get('author', ''),
+                    'chapters': pdf_meta.get('pages', 0),
+                    'language': 'en',
+                    'format': 'pdf',
+                    '_mtime': meta_mtime,
+                }
+                if old_display_title:
+                    index[item]['display_title'] = old_display_title
+                changed = True
+            except (json.JSONDecodeError, IOError):
+                pass
+        elif os.path.exists(pkl_path):
+            # EPUB book
+            pkl_mtime = os.path.getmtime(pkl_path)
+            if item in index and index[item].get('_mtime') == pkl_mtime:
+                continue
+            book = load_book_cached(item)
+            if book:
+                old_display_title = index.get(item, {}).get('display_title')
+                index[item] = {
+                    'title': book.metadata.title,
+                    'author': ', '.join(book.metadata.authors) if book.metadata.authors else '',
+                    'chapters': len(book.spine),
+                    'language': book.metadata.language or 'en',
+                    'format': 'epub',
+                    '_mtime': pkl_mtime,
+                }
+                if old_display_title:
+                    index[item]['display_title'] = old_display_title
+                changed = True
     # Remove deleted books from index
     for key in list(index.keys()):
         if key not in current_dirs:
@@ -560,10 +633,12 @@ async def library_view(request: Request):
         meta = index[item]
         books.append({
             "id": item,
-            "title": meta['title'],
+            "title": meta.get('display_title') or meta['title'],
+            "original_title": meta['title'],
             "author": meta['author'],
             "chapters": meta['chapters'],
             "language": meta['language'],
+            "format": meta.get('format', 'epub'),
         })
     return templates.TemplateResponse("library.html", {"request": request, "books": books})
 
@@ -690,6 +765,27 @@ async def serve_book_image(book_id: str, image_name: str):
     if not os.path.exists(image_path):
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(image_path)
+
+
+# --- Rename book ---
+@app.post("/api/rename-book/{book_id}")
+async def rename_book(book_id: str, request: Request):
+    """Set display_title for a book. Empty string removes custom title."""
+    req = await request.json()
+    title = req.get("title", "").strip()
+    index = {}
+    if os.path.exists(_LIBRARY_INDEX):
+        with open(_LIBRARY_INDEX, 'r') as f:
+            index = json.load(f)
+    if book_id not in index:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if title:
+        index[book_id]['display_title'] = title
+    else:
+        index[book_id].pop('display_title', None)
+    with open(_LIBRARY_INDEX, 'w') as f:
+        json.dump(index, f, ensure_ascii=False)
+    return {"ok": True, "display_title": title or None}
 
 
 # --- Delete books ---
@@ -993,6 +1089,32 @@ async def chat_about_chapter(req: AIChatRequest):
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
 
+@app.post("/api/ai/chat-context")
+async def chat_with_context(req: dict):
+    """AI chat with arbitrary text context (for PDF reader etc.)."""
+    question = (req.get("question") or "").strip()
+    context = (req.get("context") or "").strip()
+    title = (req.get("title") or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="No question provided")
+
+    parts = []
+    if title:
+        parts.append(f"当前阅读：《{title}》")
+    if context:
+        parts.append(f"【选中文本】：\n{context[:6000]}")
+    parts.append(f"【提问】：{question}")
+
+    prompt = "你是一位知识渊博的阅读助手。用与提问者相同的语言回答。回答要有条理。" \
+             "如果提供了选中文本，请结合该文本来回答。\n\n" + "\n\n".join(parts)
+
+    try:
+        gen = await _ai_stream(prompt, temperature=0.7, max_tokens=4096, task='chat')
+        return StreamingResponse(gen, media_type="text/plain; charset=utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
+
+
 # --- AI Provider Management API ---
 
 @app.get("/api/ai/providers")
@@ -1122,7 +1244,7 @@ async def test_provider(req: dict):
             resp = await asyncio.to_thread(m.generate_content, "Say 'ok'")
             return {"ok": True, "message": f"Connected: {model_name}"}
         elif fmt == 'anthropic':
-            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=15, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
                 resp = await client.post(
                     f"{base_url.rstrip('/')}/messages",
                     headers={"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
@@ -1136,7 +1258,7 @@ async def test_provider(req: dict):
             body = {"model": model_name, "messages": [{"role": "user", "content": "Say ok"}], "max_tokens": 10}
             if pid == 'zhipuai':
                 body["thinking"] = {"type": "disabled"}
-            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=15, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
                 resp = await client.post(f"{base_url.rstrip('/')}/chat/completions", headers=headers, json=body)
                 if resp.status_code != 200:
                     return {"ok": False, "message": _extract_error(resp)}
@@ -1195,14 +1317,14 @@ async def fetch_models(req: dict):
             models = await asyncio.to_thread(lambda: [m.name.replace('models/', '') for m in genai.list_models() if 'generateContent' in (m.supported_generation_methods or [])])
             return {"models": models}
         elif fmt == 'anthropic':
-            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=15, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
                 resp = await client.get(f"{base_url.rstrip('/')}/models", headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"})
                 resp.raise_for_status()
                 data = resp.json()
                 models = [m['id'] for m in data.get('data', [])]
                 return {"models": models}
         else:
-            async with httpx.AsyncClient(timeout=15, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=15, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
                 resp = await client.get(f"{base_url.rstrip('/')}/models", headers={"Authorization": f"Bearer {api_key}"})
                 resp.raise_for_status()
                 data = resp.json()
@@ -1423,15 +1545,33 @@ async def serve_apple_books_cover(asset_id: str):
 
 @app.post("/api/import-local")
 async def import_local_epub(req: dict):
-    """Import an EPUB from a local file path (e.g. Apple Books)."""
+    """Import an EPUB or PDF from a local file path (e.g. Apple Books)."""
     path = req.get("path", "")
     if not path or not os.path.exists(path):
         raise HTTPException(status_code=400, detail="File not found")
-    if not path.lower().endswith('.epub'):
-        raise HTTPException(status_code=400, detail="Only .epub files are supported")
+    path_lower = path.lower()
+    if not (path_lower.endswith('.epub') or path_lower.endswith('.pdf')):
+        raise HTTPException(status_code=400, detail="Only .epub and .pdf files are supported")
 
+    is_pdf = path_lower.endswith('.pdf')
     base_name = os.path.splitext(os.path.basename(path))[0]
     out_dir = os.path.join(BOOKS_DIR, base_name + "_data")
+
+    if is_pdf:
+        meta_info = await asyncio.to_thread(_process_pdf, path, out_dir)
+        title_name = _safe_dirname(meta_info['title'], [meta_info['author']] if meta_info['author'] else None)
+        title_dir = os.path.join(BOOKS_DIR, title_name + "_data")
+        if title_name and title_dir != out_dir and not os.path.exists(title_dir):
+            os.rename(out_dir, title_dir)
+            out_dir = title_dir
+        book_id = os.path.basename(out_dir)
+        return {
+            "success": True,
+            "book_id": book_id,
+            "title": meta_info['title'],
+            "chapters": meta_info['pages'],
+            "has_cover": True,
+        }
 
     book_obj = await asyncio.to_thread(process_epub, path, out_dir)
     await asyncio.to_thread(save_to_pickle, book_obj, out_dir)
@@ -1470,12 +1610,18 @@ async def import_local_epub(req: dict):
 
 @app.post("/api/upload")
 async def upload_epub(file: UploadFile = File(...)):
-    """Upload and process an EPUB file."""
-    if not file.filename or not file.filename.lower().endswith('.epub'):
-        raise HTTPException(status_code=400, detail="Only .epub files are supported")
+    """Upload and process an EPUB or PDF file."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+    fname_lower = file.filename.lower()
+    if not (fname_lower.endswith('.epub') or fname_lower.endswith('.pdf')):
+        raise HTTPException(status_code=400, detail="Only .epub and .pdf files are supported")
+
+    is_pdf = fname_lower.endswith('.pdf')
+    suffix = '.pdf' if is_pdf else '.epub'
 
     # Save to temp file
-    with tempfile.NamedTemporaryFile(suffix='.epub', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
@@ -1485,34 +1631,51 @@ async def upload_epub(file: UploadFile = File(...)):
         base_name = os.path.splitext(file.filename)[0]
         out_dir = os.path.join(BOOKS_DIR, base_name + "_data")
 
-        # Process in thread to avoid blocking
-        book_obj = await asyncio.to_thread(process_epub, tmp_path, out_dir)
-        await asyncio.to_thread(save_to_pickle, book_obj, out_dir)
+        if is_pdf:
+            meta_info = await asyncio.to_thread(_process_pdf, tmp_path, out_dir)
+            # Rename directory to title if different from filename
+            title_name = _safe_dirname(meta_info['title'], [meta_info['author']] if meta_info['author'] else None)
+            title_dir = os.path.join(BOOKS_DIR, title_name + "_data")
+            if title_name and title_dir != out_dir and not os.path.exists(title_dir):
+                os.rename(out_dir, title_dir)
+                out_dir = title_dir
+            book_id = os.path.basename(out_dir)
+            return {
+                "success": True,
+                "book_id": book_id,
+                "title": meta_info['title'],
+                "chapters": meta_info['pages'],
+                "has_cover": True,
+            }
+        else:
+            # Process in thread to avoid blocking
+            book_obj = await asyncio.to_thread(process_epub, tmp_path, out_dir)
+            await asyncio.to_thread(save_to_pickle, book_obj, out_dir)
 
-        # Rename directory to book title if different from filename
-        title_name = _safe_dirname(book_obj.metadata.title, book_obj.metadata.authors)
-        title_dir = os.path.join(BOOKS_DIR, title_name + "_data")
-        if title_name and title_dir != out_dir and not os.path.exists(title_dir):
-            os.rename(out_dir, title_dir)
-            out_dir = title_dir
-        book_id = os.path.basename(out_dir)
+            # Rename directory to book title if different from filename
+            title_name = _safe_dirname(book_obj.metadata.title, book_obj.metadata.authors)
+            title_dir = os.path.join(BOOKS_DIR, title_name + "_data")
+            if title_name and title_dir != out_dir and not os.path.exists(title_dir):
+                os.rename(out_dir, title_dir)
+                out_dir = title_dir
+            book_id = os.path.basename(out_dir)
 
-        # Keep a copy of the epub for future reprocessing
-        import shutil
-        shutil.copy2(tmp_path, os.path.join(out_dir, "source.epub"))
+            # Keep a copy of the epub for future reprocessing
+            import shutil
+            shutil.copy2(tmp_path, os.path.join(out_dir, "source.epub"))
 
-        # Clear LRU cache so new book appears
-        load_book_cached.cache_clear()
+            # Clear LRU cache so new book appears
+            load_book_cached.cache_clear()
 
-        return {
-            "success": True,
-            "book_id": book_id,
-            "title": book_obj.metadata.title,
-            "chapters": len(book_obj.spine),
-            "has_cover": _find_cover_image(book_id) is not None,
-        }
+            return {
+                "success": True,
+                "book_id": book_id,
+                "title": book_obj.metadata.title,
+                "chapters": len(book_obj.spine),
+                "has_cover": _find_cover_image(book_id) is not None,
+            }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process EPUB: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
     finally:
         os.unlink(tmp_path)
 
@@ -1551,12 +1714,47 @@ async def reprocess_book(book_id: str):
             os.unlink(tmp_epub)
 
 
+# --- PDF Reader Routes ---
+
+@app.get("/read-pdf/{book_id}", response_class=HTMLResponse)
+async def read_pdf(request: Request, book_id: str):
+    """Render PDF reader page."""
+    safe_id = os.path.basename(book_id)
+    meta_path = os.path.join(BOOKS_DIR, safe_id, "meta.json")
+    if not os.path.exists(meta_path):
+        raise HTTPException(status_code=404, detail="PDF book not found")
+    with open(meta_path, 'r', encoding='utf-8') as f:
+        meta = json.load(f)
+    # Check for display_title in library index
+    index = _build_library_index()
+    display_title = index.get(safe_id, {}).get('display_title')
+    return templates.TemplateResponse("pdf_reader.html", {
+        "request": request,
+        "book_id": safe_id,
+        "title": display_title or meta.get('title', 'Untitled'),
+        "pages": meta.get('pages', 0),
+    })
+
+
+@app.get("/api/pdf-file/{book_id}")
+async def serve_pdf_file(book_id: str):
+    """Serve the PDF file for the reader."""
+    safe_id = os.path.basename(book_id)
+    pdf_path = os.path.join(BOOKS_DIR, safe_id, "book.pdf")
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF file not found")
+    return FileResponse(pdf_path, media_type="application/pdf")
+
+
 @app.post("/api/search-cover/{book_id}")
 async def search_cover_online(book_id: str, req: dict = None):
     """Search for book cover online using Google Books + Douban."""
     safe_id = os.path.basename(book_id)
+
+    # Try EPUB first, then PDF meta.json
     book = load_book_cached(safe_id)
-    if not book:
+    meta_path = os.path.join(BOOKS_DIR, safe_id, "meta.json")
+    if not book and not os.path.exists(meta_path):
         raise HTTPException(status_code=404, detail="Book not found")
 
     # Allow custom query from user
@@ -1564,10 +1762,14 @@ async def search_cover_online(book_id: str, req: dict = None):
 
     if custom_query:
         query = custom_query
-    else:
+    elif book:
         title = book.metadata.title
         authors = ', '.join(book.metadata.authors) if book.metadata.authors else ''
         query = f"{title} {authors}".strip()
+    else:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            pdf_meta = json.load(f)
+        query = f"{pdf_meta.get('title', '')} {pdf_meta.get('author', '')}".strip()
 
     import urllib.parse, urllib.request
 
