@@ -34,3 +34,8 @@ package/reader3-release.zip
 # Allow .env.example (overrides parent .env.* rule)
 !package/.env.example
 package/*.epub
+
+# --- bkit / PDCA metadata ---
+docs/.pdca-snapshots/
+docs/.pdca-status.json
+docs/.bkit-memory.json
