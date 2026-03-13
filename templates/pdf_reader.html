@@ -6,12 +6,11 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='%238B5CF6'/><stop offset='100%' stop-color='%236D28D9'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='url(%23g)'/><path d='M50 25 C50 25 30 28 22 32 L22 72 C30 68 50 65 50 65 C50 65 70 68 78 72 L78 32 C70 28 50 25 50 25Z' fill='none' stroke='white' stroke-width='3' stroke-linejoin='round'/><line x1='50' y1='25' x2='50' y2='65' stroke='white' stroke-width='2.5'/></svg>">
     <title>{{ title }} — Reader 3</title>
     <style>
-        /* --- 1. Global Vars & Themes (matching EPUB reader) --- */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
             --primary: #8B5CF6; --secondary: #64748B; --surface: #F8FAFC; --on-surface: #0F172A; --outline: #E2E8F0;
             --transition: cubic-bezier(0.4, 0, 0.2, 1);
-            --panels-width: 340px;
+            --panels-width: 340px; --sidebar-width: 260px;
         }
         [data-theme="ocean"]  { --primary: #0EA5E9; --surface: #F0F7FF; --outline: #BAE6FD; --on-surface: #075985; }
         [data-theme="forest"] { --primary: #10B981; --surface: #F0FDF4; --outline: #BBF7D0; --on-surface: #065F46; }
@@ -23,62 +22,82 @@
             font-family: -apple-system, Inter, system-ui, sans-serif;
             background: var(--surface); color: var(--on-surface);
             -webkit-font-smoothing: antialiased;
-            overflow: hidden; height: 100vh;
-            display: flex;
+            overflow: hidden; height: 100vh; display: flex;
             transition: background 0.4s var(--transition), color 0.4s var(--transition);
         }
 
-        /* --- 2. PDF Viewer (main area) --- */
+        /* --- Sidebar (TOC) --- */
+        #sidebar { width: var(--sidebar-width); min-width: 0; background: rgba(0,0,0,0.03); border-right: 1px solid var(--outline); overflow-y: auto; overflow-x: hidden; flex-shrink: 0; transition: width 0.3s var(--transition); padding: 60px 0 24px 0; }
+        #sidebar.collapsed { width: 0 !important; border-right: none; }
+        [data-theme="sepia"] #sidebar { background: rgba(180, 140, 60, 0.06); }
+        [data-theme="dark"] #sidebar { background: rgba(255,255,255,0.02); }
+        .sidebar-header { padding: 0 16px 24px; }
+        .sidebar-back { color: var(--secondary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: color 0.2s; }
+        .sidebar-back:hover { color: var(--primary); }
+        .toc-header { padding: 0 16px 10px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--secondary); }
+        .toc-item { display: flex; align-items: center; padding: 7px 16px; font-size: 0.82rem; font-weight: 700; color: var(--on-surface); cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; text-decoration: none; line-height: 1.4; }
+        .toc-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); color: var(--primary); }
+        .toc-item.active { color: var(--primary); border-left-color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, transparent); }
+        .toc-item .toc-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .toc-item.level-2 { padding-left: 28px; font-size: 0.76rem; font-weight: 600; }
+        .toc-item.level-3 { padding-left: 40px; font-size: 0.70rem; font-weight: 500; opacity: 0.9; }
+        .toc-item.level-4 { padding-left: 50px; font-size: 0.65rem; font-weight: 400; opacity: 0.8; }
+        .toc-item.level-5 { padding-left: 58px; font-size: 0.60rem; font-weight: 400; opacity: 0.7; }
+        .toc-toggle { flex-shrink: 0; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 4px; color: var(--secondary); transition: all 0.2s; margin-left: 4px; opacity: 0.5; }
+        .toc-toggle:hover { opacity: 1; color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+        .toc-toggle svg { width: 12px; height: 12px; transition: transform 0.2s; }
+        .toc-toggle.expanded svg { transform: rotate(90deg); }
+        .toc-children { overflow: hidden; }
+        .toc-children.collapsed { display: none; }
+        .toc-page-list { padding: 4px 0; }
+        .toc-page-item { display: block; padding: 5px 16px; font-size: 0.75rem; color: var(--secondary); cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; }
+        .toc-page-item:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, transparent); }
+        .toc-page-item.active { color: var(--primary); font-weight: 700; border-left-color: var(--primary); background: color-mix(in srgb, var(--primary) 6%, transparent); }
+
+        /* --- PDF Viewer --- */
         #pdf-viewer {
-            flex: 1; height: 100vh;
-            overflow-y: auto; overflow-x: hidden;
-            padding: 80px 0 40px;
-            display: flex; flex-direction: column; align-items: center;
-            gap: 8px;
-            background: #ffffff;
-            transition: background 0.4s var(--transition);
+            flex: 1; height: 100vh; overflow-y: auto; overflow-x: hidden;
+            padding: 80px 0 40px; display: flex; flex-direction: column; align-items: center;
+            gap: 8px; background: #ffffff; transition: background 0.4s var(--transition); position: relative;
         }
         [data-theme="sepia"] #pdf-viewer { background: #FCF6E5; }
         [data-theme="dark"] #pdf-viewer { background: #1A1A1C; }
+        [data-theme="dark"] .pdf-page-container canvas { filter: invert(0.88) hue-rotate(180deg); }
+        [data-theme="dark"] .pdf-page-container .textLayer ::selection { background: rgba(187, 134, 252, 0.4); }
 
-        .pdf-page-container {
-            position: relative;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            background: white;
-            overflow: clip;
-            border-radius: 2px;
-        }
+        .pdf-page-container { position: relative; box-shadow: 0 2px 12px rgba(0,0,0,0.08); background: white; overflow: clip; border-radius: 2px; }
         [data-theme="dark"] .pdf-page-container { box-shadow: 0 2px 16px rgba(0,0,0,0.4); }
         .pdf-page-container canvas { display: block; }
 
-        /* PDF.js text layer */
-        .textLayer {
-            position: absolute; inset: 0; overflow: clip;
-            opacity: 1; line-height: 1;
-            text-size-adjust: none; forced-color-adjust: none;
-            transform-origin: 0 0; z-index: 2;
-            pointer-events: none;
-        }
-        .textLayer :is(span, br) {
-            color: transparent; position: absolute; white-space: pre;
-            cursor: text; transform-origin: 0% 0%; pointer-events: auto;
-        }
+        .textLayer { position: absolute; inset: 0; overflow: clip; opacity: 1; line-height: 1; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; z-index: 2; pointer-events: none; }
+        .textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; pointer-events: auto; }
         .textLayer span:empty { pointer-events: none; }
         .textLayer ::selection { background: color-mix(in srgb, var(--primary) 40%, transparent); }
 
-        /* Loading indicator */
-        .page-loading {
-            display: flex; justify-content: center; align-items: center;
-            color: var(--secondary); font-size: 0.85rem; min-height: 400px; opacity: 0.5;
-        }
+        /* Highlight overlays on PDF canvas */
+        .pdf-highlight-layer { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+        .pdf-hl-rect { position: absolute; pointer-events: auto; cursor: pointer; opacity: 0.35; border-radius: 2px; transition: opacity 0.15s; }
+        .pdf-hl-rect:hover { opacity: 0.55; }
+        .pdf-hl-rect.hl-yellow { background: #FACC15; } .pdf-hl-rect.hl-green { background: #4ADE80; }
+        .pdf-hl-rect.hl-blue { background: #60A5FA; } .pdf-hl-rect.hl-pink { background: #F472B6; }
+        .pdf-hl-rect.hl-gray { background: #94A3B8; }
 
-        /* Ghost Scrollbars */
-        #pdf-viewer, .ai-content { scrollbar-width: none; -ms-overflow-style: none; }
-        #pdf-viewer::-webkit-scrollbar, .ai-content::-webkit-scrollbar { width: 3px; background: transparent; }
-        #pdf-viewer::-webkit-scrollbar-thumb, .ai-content::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; transition: 0.3s; }
-        #pdf-viewer:hover::-webkit-scrollbar-thumb, .ai-content:hover::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
+        /* Search highlight overlays */
+        .pdf-search-hl { position: absolute; background: rgba(250, 204, 21, 0.4); z-index: 1; pointer-events: none; border-radius: 1px; }
+        .pdf-search-hl.active { background: rgba(249, 115, 22, 0.5); }
 
-        /* --- 3. Satellite Controls (matching EPUB reader) --- */
+        .page-loading { display: flex; justify-content: center; align-items: center; color: var(--secondary); font-size: 0.85rem; min-height: 400px; opacity: 0.5; }
+
+        /* Ghost scrollbars */
+        #sidebar, #pdf-viewer, .ai-content { scrollbar-width: none; -ms-overflow-style: none; }
+        #sidebar::-webkit-scrollbar, #pdf-viewer::-webkit-scrollbar, .ai-content::-webkit-scrollbar { width: 3px; background: transparent; }
+        #sidebar::-webkit-scrollbar-thumb, #pdf-viewer::-webkit-scrollbar-thumb, .ai-content::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; transition: 0.3s; }
+        #sidebar:hover::-webkit-scrollbar-thumb, #pdf-viewer:hover::-webkit-scrollbar-thumb, .ai-content:hover::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
+        #notebook-panel, #search-panel .sp-results { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent; }
+        #notebook-panel::-webkit-scrollbar, #search-panel .sp-results::-webkit-scrollbar { width: 3px; }
+        #notebook-panel::-webkit-scrollbar-thumb, #search-panel .sp-results::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+
+        /* --- Satellite Controls --- */
         .toggle-btn {
             position: fixed; width: 30px; height: 30px;
             background: color-mix(in srgb, var(--surface) 95%, transparent); backdrop-filter: blur(12px);
@@ -91,239 +110,306 @@
         .toggle-btn:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
         .toggle-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
 
-        /* Left button group */
         .toggle-group {
             position: fixed; top: 24px; left: 24px;
             z-index: 2000; display: flex; flex-direction: column; align-items: center; gap: 0;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transition: left 0.3s var(--transition), opacity 0.3s ease, transform 0.3s ease;
         }
+        #sidebar:not(.collapsed) ~ .toggle-group { left: calc(var(--sidebar-width) + 24px); }
         .toggle-group .toggle-btn { position: static; }
+        #toggle-left .icon-collapse { display: none; transition: transform 0.3s ease; }
+        #sidebar.collapsed ~ .toggle-group #toggle-left .icon-collapse { transform: scaleX(-1); }
+        .toggle-group:hover #toggle-left .icon-hamburger, .toggle-group.expanded #toggle-left .icon-hamburger { display: none; }
+        .toggle-group:hover #toggle-left .icon-collapse, .toggle-group.expanded #toggle-left .icon-collapse { display: block; }
         .toggle-group .toggle-sub {
             opacity: 0; transform: scale(0.6) translateY(-12px); pointer-events: none;
             transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), margin-top 0.2s ease, max-height 0.2s ease;
             margin-top: 0; max-height: 0; overflow: hidden; transition-delay: 0s;
         }
-        .toggle-group:hover .toggle-sub,
-        .toggle-group.expanded .toggle-sub {
+        .toggle-group:hover .toggle-sub, .toggle-group.expanded .toggle-sub {
             opacity: 1; transform: scale(1) translateY(0); pointer-events: auto;
             max-height: 50px; margin-top: 24px; overflow: visible;
         }
-        .toggle-group:hover .toggle-sub:nth-child(2),
-        .toggle-group.expanded .toggle-sub:nth-child(2) { transition-delay: 0.03s; }
-        .toggle-group:hover .toggle-sub:nth-child(3),
-        .toggle-group.expanded .toggle-sub:nth-child(3) { transition-delay: 0.09s; }
-        .toggle-group .toggle-sub:nth-child(2) { transition-delay: 0.03s; }
-        .toggle-group .toggle-sub:nth-child(3) { transition-delay: 0s; }
+        .toggle-group:hover .toggle-sub:nth-child(2), .toggle-group.expanded .toggle-sub:nth-child(2) { transition-delay: 0.03s; }
+        .toggle-group:hover .toggle-sub:nth-child(3), .toggle-group.expanded .toggle-sub:nth-child(3) { transition-delay: 0.09s; }
+        .toggle-group:hover .toggle-sub:nth-child(4), .toggle-group.expanded .toggle-sub:nth-child(4) { transition-delay: 0.15s; }
+        .toggle-group:hover .toggle-sub:nth-child(5), .toggle-group.expanded .toggle-sub:nth-child(5) { transition-delay: 0.21s; }
+        .toggle-group .toggle-sub:nth-child(2) { transition-delay: 0.09s; }
+        .toggle-group .toggle-sub:nth-child(3) { transition-delay: 0.06s; }
+        .toggle-group .toggle-sub:nth-child(4) { transition-delay: 0.03s; }
+        .toggle-group .toggle-sub:nth-child(5) { transition-delay: 0s; }
 
-        /* Right toggle (AI panel) */
+        .toggle-group.auto-hidden, #toggle-right.auto-hidden, .page-indicator.auto-hidden { opacity: 0; transform: translateY(-20px); pointer-events: none; }
+        #toggle-right.rotated.auto-hidden { transform: translateY(-20px) rotate(180deg); }
+        .page-indicator.auto-hidden { transform: translateX(-50%) translateY(-20px); }
+
         #toggle-right { position: fixed; top: 24px; right: calc(var(--panels-width) + 24px); transition: transform 0.3s ease, right 0.3s var(--transition); }
         #panels-container.collapsed ~ #toggle-right { right: 24px; }
         .rotated { transform: rotate(180deg); }
         #toggle-right:hover { transform: translateY(-1px) rotate(180deg); }
         #toggle-right.rotated:hover { transform: translateY(-1px) rotate(0deg); }
 
-        /* Page indicator (floating) */
+        /* Bookmark toggle */
+        #stats-bookmark { position: fixed; top: 24px; right: 64px; z-index: 2000; transition: right 0.3s var(--transition); }
+        #panels-container:not(.collapsed) ~ #stats-bookmark { right: calc(var(--panels-width) + 64px); }
+        #stats-bookmark.bookmarked { color: var(--primary); }
+        #stats-bookmark.bookmarked svg { fill: var(--primary); }
+
+        /* Page indicator */
         .page-indicator {
-            position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
-            z-index: 1900;
+            position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 1900;
             font-size: 0.75rem; font-weight: 600; color: var(--secondary);
             background: color-mix(in srgb, var(--surface) 95%, transparent); backdrop-filter: blur(12px);
-            border: 1.2px solid var(--outline); border-radius: 10px;
-            padding: 4px 14px; white-space: nowrap;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            font-variant-numeric: tabular-nums;
+            border: 1.2px solid var(--outline); border-radius: 10px; padding: 4px 14px; white-space: nowrap;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06); transition: opacity 0.3s ease, transform 0.3s ease;
+            font-variant-numeric: tabular-nums; cursor: pointer;
+        }
+        .page-indicator input {
+            width: 40px; border: none; background: transparent; color: var(--on-surface);
+            font-size: 0.75rem; font-weight: 600; text-align: center; outline: none; font-family: inherit;
         }
 
-        /* Auto-hide controls on scroll */
-        .toggle-group.auto-hidden, #toggle-right.auto-hidden, .page-indicator.auto-hidden {
-            opacity: 0; transform: translateY(-20px); pointer-events: none;
-        }
-        #toggle-right.rotated.auto-hidden { transform: translateY(-20px) rotate(180deg); }
-        .page-indicator.auto-hidden { transform: translateX(-50%) translateY(-20px); }
+        /* Progress bar */
+        #progress-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 3px; z-index: 1900; background: rgba(0,0,0,0.05); }
+        #progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.15s linear; border-radius: 0 2px 2px 0; }
 
-        /* --- 4. AI Panel (matching EPUB reader) --- */
+        /* --- AI Panel --- */
         #panels-container {
-            width: var(--panels-width); min-width: 0;
-            background: rgba(0,0,0,0.015); border-left: 1px solid var(--outline);
-            display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
-            transition: width 0.3s var(--transition); position: relative;
+            width: var(--panels-width); min-width: 0; background: rgba(0,0,0,0.015);
+            border-left: 1px solid var(--outline); display: flex; flex-direction: column;
+            overflow: hidden; flex-shrink: 0; transition: width 0.3s var(--transition); position: relative;
         }
         #panels-container.collapsed { width: 0 !important; border-left: none; }
         [data-theme="sepia"] #panels-container { background: rgba(180, 140, 60, 0.06); }
 
-        /* AI brand header */
         .ai-brand { display: flex; align-items: baseline; gap: 6px; }
         .ai-brand .panel-title { font-size: 1rem; font-weight: 800; letter-spacing: 0.1em; color: var(--on-surface); }
         .ai-brand .panel-subtitle { font-size: 0.75rem; font-weight: 600; color: var(--on-surface); opacity: 0.75; margin-left: 4px; letter-spacing: 0.15em; }
-
         .ai-content { flex: 1; overflow-y: auto; padding: 16px 24px; }
 
-        /* Chat bubbles (matching EPUB reader) */
+        /* Chat session list */
+        .session-list { max-height: 200px; overflow-y: auto; border-bottom: 1px solid var(--outline); padding: 6px 12px; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent; }
+        .session-list::-webkit-scrollbar { width: 3px; } .session-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+        .session-item { padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s; margin-bottom: 2px; position: relative; }
+        .session-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+        .session-item.active { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+        .session-title { font-size: 0.78rem; font-weight: 600; color: var(--on-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 20px; }
+        .session-meta { font-size: 0.6rem; color: var(--secondary); margin-top: 2px; display: flex; gap: 8px; }
+        .session-del { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--secondary); cursor: pointer; font-size: 0.85rem; opacity: 0; transition: opacity 0.15s; padding: 0 4px; border-radius: 4px; }
+        .session-item:hover .session-del { opacity: 1; } .session-del:hover { color: #EF4444; }
+        .session-empty { font-size: 0.75rem; color: var(--secondary); text-align: center; padding: 12px; opacity: 0.5; }
+
+        /* Chat bubbles */
         @keyframes bubbleIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .chat-bubble {
-            margin-bottom: 0; padding: 18px 18px; border-radius: 15px;
-            font-size: 0.78rem; line-height: 1.7; position: relative;
-            margin-top: 20px; animation: bubbleIn 0.35s ease-out;
-            transition: box-shadow 0.25s ease, transform 0.25s ease;
-            word-break: break-word; white-space: pre-wrap;
-        }
+        .chat-bubble { margin-bottom: 0; padding: 18px; border-radius: 15px; font-size: 0.78rem; line-height: 1.7; position: relative; margin-top: 20px; animation: bubbleIn 0.35s ease-out; transition: box-shadow 0.25s ease, transform 0.25s ease; word-break: break-word; }
         .chat-bubble:first-child { margin-top: 0; }
-        .chat-bubble.user {
-            background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, var(--surface)), color-mix(in srgb, var(--primary) 78%, var(--surface)));
-            color: white; margin-left: 60px; border-bottom-right-radius: 2px;
-            box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 15%, transparent);
-        }
+        .chat-bubble.user { background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, var(--surface)), color-mix(in srgb, var(--primary) 78%, var(--surface))); color: white; margin-left: 60px; border-bottom-right-radius: 2px; box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 15%, transparent); }
         .chat-bubble.user:hover { box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 28%, transparent); transform: translateY(-1px); }
-        .chat-bubble.ai {
-            background: color-mix(in srgb, var(--outline) 45%, var(--surface)); color: var(--on-surface);
-            margin-left: 0; margin-right: 0; border-bottom-left-radius: 2px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-        }
+        .chat-bubble.ai { background: color-mix(in srgb, var(--outline) 45%, var(--surface)); color: var(--on-surface); border-bottom-left-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
         .chat-bubble.ai:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.08); transform: translateY(-1px); }
-        .chat-bubble.context {
-            background: color-mix(in srgb, var(--primary) 8%, var(--surface));
-            border-left: 3px solid var(--primary); border-radius: 0 10px 10px 0;
-            color: var(--secondary); font-size: 0.75rem; padding: 10px 14px;
-            font-style: italic; margin-top: 12px;
-        }
+        .chat-bubble.context { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); border-left: 3px solid var(--primary); border-radius: 0 10px 10px 0; color: var(--secondary); font-size: 0.75rem; padding: 10px 14px; font-style: italic; margin-top: 12px; }
+        .chat-bubble .msg-bar { display: flex; gap: 4px; margin-top: 8px; justify-content: flex-end; opacity: 0; transition: opacity 0.15s; }
+        .chat-bubble:hover .msg-bar { opacity: 1; }
+        .msg-bar button { background: none; border: none; padding: 3px; cursor: pointer; color: var(--secondary); border-radius: 4px; transition: 0.15s; }
+        .msg-bar button:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+        .msg-bar button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-        /* Quick Action Chips */
-        .quick-actions {
-            display: flex; flex-wrap: nowrap; gap: 6px; padding: 10px 24px;
-            overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
-        }
+        /* Quick actions */
+        .quick-actions { display: flex; flex-wrap: nowrap; gap: 6px; padding: 10px 24px; overflow-x: auto; scrollbar-width: none; }
         .quick-actions::-webkit-scrollbar { display: none; }
-        .quick-btn {
-            background: color-mix(in srgb, var(--secondary) 6%, var(--surface));
-            border: 1px solid color-mix(in srgb, var(--outline) 30%, transparent);
-            padding: 6px 14px; border-radius: 15px; font-size: 0.75rem; font-weight: 500;
-            color: var(--secondary); cursor: pointer; transition: all 0.2s ease;
-            white-space: nowrap; flex-shrink: 0;
-        }
-        .quick-btn:hover {
-            color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface));
-            border-color: color-mix(in srgb, var(--primary) 25%, transparent);
-            transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-        }
-        .quick-btn:active { transform: translateY(0) scale(0.97); box-shadow: none; }
+        .quick-btn { background: color-mix(in srgb, var(--secondary) 6%, var(--surface)); border: 1px solid color-mix(in srgb, var(--outline) 30%, transparent); padding: 6px 14px; border-radius: 15px; font-size: 0.75rem; font-weight: 500; color: var(--secondary); cursor: pointer; transition: all 0.2s ease; white-space: nowrap; flex-shrink: 0; }
+        .quick-btn:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); border-color: color-mix(in srgb, var(--primary) 25%, transparent); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .quick-btn:active { transform: translateY(0) scale(0.97); }
 
-        /* Empty state */
-        .ai-empty {
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100%; text-align: center; color: var(--secondary); gap: 8px; opacity: 0.66;
-            transition: opacity 0.4s ease;
-        }
+        .ai-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--secondary); gap: 8px; opacity: 0.66; transition: opacity 0.4s ease; }
         .ai-empty:hover { opacity: 1; }
         .ai-empty-icon { font-size: 2.5rem; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .ai-empty:hover .ai-empty-icon { transform: scale(1.1); }
-        .ai-empty-text { font-size: 0.8rem; line-height: 1.5; transition: color 0.4s ease; }
-        .ai-empty:hover .ai-empty-text { color: var(--on-surface); }
+        .ai-empty-text { font-size: 0.8rem; line-height: 1.5; }
 
-        /* AI input */
         .ai-input-wrap { padding: 12px 24px; }
-        .ai-input-wrap textarea {
-            width: 100%; border: 1.5px solid color-mix(in srgb, var(--primary) 60%, var(--outline));
-            border-radius: 15px; padding: 10px 16px; outline: none; font-size: 0.85rem;
-            background: var(--surface); color: var(--on-surface); resize: none;
-            font-family: inherit; line-height: 1.5; max-height: 120px; min-height: 42px;
-            transition: border-color 0.25s ease, box-shadow 0.25s ease;
-        }
+        .ai-input-wrap textarea { width: 100%; border: 1.5px solid color-mix(in srgb, var(--primary) 60%, var(--outline)); border-radius: 15px; padding: 10px 16px; outline: none; font-size: 0.85rem; background: var(--surface); color: var(--on-surface); resize: none; font-family: inherit; line-height: 1.5; max-height: 120px; min-height: 42px; transition: border-color 0.25s ease, box-shadow 0.25s ease; }
         .ai-input-wrap textarea::placeholder { color: var(--secondary); opacity: 0.66; font-size: 0.8rem; }
         .ai-input-wrap textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 4.5px color-mix(in srgb, var(--primary) 12%, transparent); }
 
-        /* Icon button */
-        .icon-btn {
-            background: none; border: none; padding: 8px; cursor: pointer;
-            color: var(--secondary); transition: 0.2s; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-        }
+        .icon-btn { background: none; border: none; padding: 8px; cursor: pointer; color: var(--secondary); transition: 0.2s; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
         .icon-btn:hover { background: rgba(0,0,0,0.05); color: var(--primary); }
 
-        /* --- 5. Selection Toolbar (matching EPUB reader) --- */
-        #selection-toolbar {
-            position: fixed; display: none; z-index: 2500;
-            background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(16px);
-            border: 1px solid var(--outline); border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-            padding: 4px 6px; align-items: center; gap: 2px;
-            animation: toolbarIn 0.15s ease-out;
-        }
+        /* Audio console */
+        #audio-console { padding: 10px 16px; border-top: 1px solid var(--outline); background: var(--surface); display: flex; flex-direction: column; gap: 8px; max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.3s var(--transition), opacity 0.3s var(--transition), padding 0.3s var(--transition); padding-top: 0; padding-bottom: 0; }
+        #audio-console.visible { max-height: 80px; opacity: 1; padding-top: 10px; padding-bottom: 10px; }
+        .player-actions { display: flex; justify-content: center; align-items: center; gap: 16px; }
+        .player-label { background: none; border: none; cursor: pointer; color: var(--secondary); padding: 8px; border-radius: 50%; transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1); display: flex; align-items: center; justify-content: center; }
+        .player-label:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); transform: scale(1.12); }
+        .player-label svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .play-main { width: 36px; height: 36px; background: var(--primary); color: white; box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent); transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+        .play-main:hover { transform: scale(1.1); box-shadow: 0 6px 20px color-mix(in srgb, var(--primary) 45%, transparent); }
+
+        /* Audio popup menus */
+        .audio-popup { position: fixed; display: none; z-index: 2900; background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--outline); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.14); overflow: hidden; animation: toolbarIn 0.15s ease-out; }
+        .audio-popup.visible { display: flex; flex-direction: column; }
+        .audio-popup-list { overflow-y: auto; padding: 5px; max-height: 280px; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent; position: relative; }
+        .audio-popup-list::-webkit-scrollbar { width: 3px; } .audio-popup-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+        .ap-slider { position: absolute; top: 0; left: 5px; right: 5px; border-radius: 7px; background: color-mix(in srgb, var(--primary) 10%, transparent); transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), height 0.2s ease; pointer-events: none; z-index: 0; }
+        .ap-group { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--secondary); padding: 8px 12px 4px; opacity: 0.6; position: relative; z-index: 1; }
+        .ap-item { padding: 6px 12px; border-radius: 7px; cursor: pointer; font-size: 0.78rem; color: var(--on-surface); transition: color 0.2s; display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; z-index: 1; }
+        .ap-item::before { content: ''; position: absolute; inset: 3px 0; border-radius: 7px; background: transparent; transition: background 0.2s; z-index: -1; }
+        .ap-item:hover::before { background: color-mix(in srgb, var(--primary) 4%, transparent); }
+        .ap-item.active { color: var(--primary); font-weight: 700; }
+        .ap-check { font-size: 0.7rem; opacity: 0; transition: opacity 0.2s; } .ap-item.active .ap-check { opacity: 1; }
+
+        .speed-slider-wrap { padding: 16px 20px 12px; width: 260px; }
+        .speed-track { position: relative; height: 4px; background: #E2E8F0; border-radius: 2px; margin: 0 6px; }
+        .speed-fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--primary); border-radius: 2px; transition: width 0.2s cubic-bezier(0.22, 1, 0.36, 1); }
+        .speed-thumb { position: absolute; top: 50%; width: 18px; height: 18px; background: var(--primary); border: none; border-radius: 50%; background-image: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 50%); box-shadow: inset 0 1px 1px rgba(255,255,255,0.4), 0 1px 4px rgba(0,0,0,0.1); transform: translate(-50%, -50%); transition: left 0.2s cubic-bezier(0.22, 1, 0.36, 1), transform 0.2s, box-shadow 0.2s; }
+        .speed-thumb:hover { transform: translate(-50%, -50%) scale(1.08); }
+        .speed-thumb:active, .speed-thumb.dragging { transform: translate(-50%, -50%) scale(1.1); }
+        .speed-thumb::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
+        .speed-labels { display: flex; justify-content: space-between; margin-top: 14px; padding: 0 2px; }
+        .speed-label-dot { font-size: 0.65rem; font-weight: 700; color: var(--secondary); cursor: pointer; padding: 2px 0; transition: color 0.2s; text-align: center; min-width: 24px; opacity: 0.5; }
+        .speed-label-dot:hover, .speed-label-dot.active { color: var(--primary); opacity: 1; }
+
+        /* --- Selection Toolbar --- */
+        #selection-toolbar { position: fixed; display: none; z-index: 2500; background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(16px); border: 1px solid var(--outline); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); padding: 4px 6px; align-items: center; gap: 2px; animation: toolbarIn 0.15s ease-out; }
         #selection-toolbar.visible { display: flex; }
         @keyframes toolbarIn { from { opacity: 0; } to { opacity: 1; } }
-        .sel-btn {
-            background: none; border: none; padding: 6px 10px; font-size: 0.78rem; font-weight: 800;
-            color: var(--secondary); cursor: pointer; border-radius: 8px; transition: 0.2s; white-space: nowrap;
-        }
+        .sel-btn { background: none; border: none; padding: 6px 10px; font-size: 0.78rem; font-weight: 800; color: var(--secondary); cursor: pointer; border-radius: 8px; transition: 0.2s; white-space: nowrap; }
         .sel-btn:hover { color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+        .sel-divider { width: 1px; height: 16px; background: var(--outline); margin: 0 2px; }
+        .hl-dot { width: 16px; height: 16px; border-radius: 50%; border: none; cursor: pointer; transition: transform 0.15s; }
+        .hl-dot:hover { transform: scale(1.2); }
+        .hl-dot.yellow { background: #FACC15; } .hl-dot.green { background: #4ADE80; }
+        .hl-dot.blue { background: #60A5FA; } .hl-dot.pink { background: #F472B6; }
+        .hl-dot.gray { background: #94A3B8; }
 
-        /* --- 6. Lookup Popup (matching EPUB reader) --- */
-        #lookup-popup {
-            position: fixed; display: none; z-index: 2400;
-            background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px);
-            border: 1px solid var(--outline); border-radius: 14px;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.14);
-            padding: 14px 16px; max-width: 340px; min-width: 160px;
-            animation: toolbarIn 0.15s ease-out;
-        }
+        /* Lookup popup */
+        #lookup-popup { position: fixed; display: none; z-index: 2400; background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--outline); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,0.14); padding: 14px 16px; max-width: 340px; min-width: 160px; animation: toolbarIn 0.15s ease-out; }
         #lookup-popup.visible { display: block; }
         #lookup-popup .lookup-translation { font-size: 1rem; font-weight: 600; line-height: 1.5; color: var(--on-surface); margin-bottom: 2px; }
         #lookup-popup .lookup-explanation { font-size: 0.82rem; line-height: 1.6; color: var(--secondary); margin-top: 6px; }
         #lookup-popup .lookup-loading { font-size: 0.8rem; color: var(--secondary); opacity: 0.6; }
-        #lookup-popup .lookup-close {
-            position: absolute; top: 6px; right: 8px; background: none; border: none;
-            font-size: 0.7rem; color: var(--secondary); cursor: pointer; opacity: 0.4;
-            padding: 2px 6px; border-radius: 4px;
-        }
+        #lookup-popup .lookup-close { position: absolute; top: 6px; right: 8px; background: none; border: none; font-size: 0.7rem; color: var(--secondary); cursor: pointer; opacity: 0.4; padding: 2px 6px; border-radius: 4px; }
         #lookup-popup .lookup-close:hover { opacity: 1; background: rgba(0,0,0,0.05); }
 
-        /* --- 7. Theme Settings Card --- */
-        #settings-panel {
-            position: fixed; top: 80px; left: 70px; width: 280px;
-            background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px);
-            border: 1px solid var(--outline); border-radius: 20px; padding: 18px;
-            box-shadow: 0 25px 60px rgba(0,0,0,0.15); z-index: 3000; display: none;
-        }
+        /* --- Settings Panel --- */
+        #settings-panel { position: fixed; top: 80px; width: 280px; background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--outline); border-radius: 20px; padding: 18px; box-shadow: 0 25px 60px rgba(0,0,0,0.15); z-index: 3000; display: none; }
+        #sidebar.collapsed ~ #settings-panel { left: 70px; }
+        #sidebar:not(.collapsed) ~ #settings-panel { left: calc(var(--sidebar-width) + 70px); }
         .setting-section { margin-bottom: 18px; }
+        .setting-section:last-child { margin-bottom: 0; }
         .setting-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--secondary); margin-bottom: 9px; }
         .theme-flex { display: flex; justify-content: space-between; }
-        .theme-dot {
-            width: 30px; height: 18px; border-radius: 15px; cursor: pointer; border: none;
-            background-image: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 50%);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.4);
-            transition: transform 0.2s ease, box-shadow 0.3s ease;
-        }
+        .theme-dot { width: 30px; height: 18px; border-radius: 15px; cursor: pointer; border: none; background-image: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 50%); box-shadow: 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.4); transition: transform 0.2s ease, box-shadow 0.3s ease; }
         .theme-dot:hover { transform: scale(1.1); }
-        .theme-dot.active { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 15px; }
+        .theme-dot.active { outline: 2px solid var(--primary); outline-offset: 3px; }
         .dot-lavender { background-color: #8B5CF6; } .dot-ocean { background-color: #0EA5E9; }
-        .dot-forest { background-color: #10B981; }  .dot-sepia { background-color: #D97706; }
-        .dot-slate { background-color: #6366F1; }    .dot-dark { background-color: #1E293B; }
+        .dot-forest { background-color: #10B981; } .dot-sepia { background-color: #D97706; }
+        .dot-slate { background-color: #6366F1; } .dot-dark { background-color: #1E293B; }
+        .zoom-controls { display: flex; align-items: center; gap: 8px; }
+        .zoom-btn { background: color-mix(in srgb, var(--outline) 50%, var(--surface)); border: 1px solid var(--outline); border-radius: 8px; width: 32px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 700; color: var(--secondary); transition: 0.15s; }
+        .zoom-btn:hover { color: var(--primary); border-color: var(--primary); }
+        .zoom-level { flex: 1; text-align: center; font-size: 0.75rem; font-weight: 700; color: var(--on-surface); }
 
-        /* --- 8. Mobile Responsive --- */
+        /* --- Search Panel --- */
+        #search-panel { position: fixed; top: 80px; width: 330px; max-height: 70vh; background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--outline); border-radius: 20px; padding: 18px; box-shadow: 0 25px 60px rgba(0,0,0,0.15); z-index: 3000; display: none; }
+        #sidebar.collapsed ~ #search-panel { left: 70px; }
+        #sidebar:not(.collapsed) ~ #search-panel { left: calc(var(--sidebar-width) + 70px); }
+        .sp-input { width: 100%; padding: 8px 12px; border: 1.5px solid var(--outline); border-radius: 10px; font-size: 0.8rem; background: var(--surface); color: var(--on-surface); outline: none; font-family: inherit; transition: border-color 0.2s; }
+        .sp-input:focus { border-color: var(--primary); }
+        .sp-status { font-size: 0.7rem; color: var(--secondary); margin: 8px 0; opacity: 0.6; }
+        .sp-results { max-height: 50vh; overflow-y: auto; }
+        .sp-item { padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s; margin-bottom: 4px; }
+        .sp-item:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
+        .sp-item .sp-page { font-size: 0.65rem; font-weight: 700; color: var(--primary); }
+        .sp-item .sp-snippet { font-size: 0.78rem; color: var(--on-surface); line-height: 1.4; margin-top: 2px; }
+        .sp-item .sp-snippet mark { background: color-mix(in srgb, var(--primary) 20%, transparent); color: var(--on-surface); border-radius: 2px; padding: 0 1px; }
+
+        /* --- Notebook Panel --- */
+        #notebook-panel { position: fixed; top: 80px; width: 330px; max-height: 70vh; background: color-mix(in srgb, var(--surface) 98%, transparent); backdrop-filter: blur(20px); border: 1px solid var(--outline); border-radius: 20px; padding: 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.15); z-index: 3000; display: none; overflow-y: auto; transition: left 0.3s var(--transition); }
+        #sidebar.collapsed ~ #notebook-panel { left: 70px; }
+        #sidebar:not(.collapsed) ~ #notebook-panel { left: calc(var(--sidebar-width) + 70px); }
+        .nb-tabs { display: flex; gap: 0; margin-bottom: 14px; border-bottom: 1px solid var(--outline); }
+        .nb-tab { flex: 1; padding: 8px 0; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; color: var(--secondary); background: none; border: none; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; text-align: center; }
+        .nb-tab:hover { color: var(--primary); }
+        .nb-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        #notebook-panel .nb-header { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; color: var(--secondary); margin-bottom: 10px; display: flex; justify-content: flex-end; align-items: center; }
+        #notebook-panel .nb-toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+        #notebook-panel .nb-search { width: 100%; padding: 7px 10px 7px 30px; border: 1px solid var(--outline); border-radius: 8px; font-size: 0.75rem; background: var(--surface); color: var(--on-surface); outline: none; font-family: inherit; transition: border-color 0.2s; }
+        #notebook-panel .nb-search:focus { border-color: var(--primary); }
+        #notebook-panel .nb-search-wrap { position: relative; }
+        #notebook-panel .nb-search-wrap::before { content: ''; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border: 1.5px solid var(--secondary); border-radius: 50%; opacity: 0.5; }
+        #notebook-panel .nb-search-wrap::after { content: ''; position: absolute; left: 20px; top: calc(50% + 5px); width: 1.5px; height: 5px; background: var(--secondary); opacity: 0.5; transform: rotate(-45deg); transform-origin: top; }
+        #notebook-panel .nb-filters { display: flex; align-items: center; justify-content: space-between; }
+        #notebook-panel .nb-color-filters { display: flex; gap: 6px; align-items: center; }
+        #notebook-panel .nb-color-dot { width: 14px; height: 14px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; opacity: 0.6; }
+        #notebook-panel .nb-color-dot:hover { opacity: 1; transform: scale(1.15); }
+        #notebook-panel .nb-color-dot.active { border-color: var(--on-surface); opacity: 1; }
+        #notebook-panel .nb-empty { font-size: 0.8rem; color: var(--secondary); opacity: 0.5; text-align: center; padding: 20px 0; }
+        #notebook-panel .nb-item { padding: 10px 12px; margin-bottom: 8px; border-radius: 10px; cursor: pointer; background: color-mix(in srgb, var(--outline) 50%, transparent); transition: background 0.15s; position: relative; }
+        #notebook-panel .nb-item:hover { background: var(--outline); }
+        #notebook-panel .nb-text { font-size: 0.8rem; line-height: 1.5; color: var(--on-surface); }
+        #notebook-panel .nb-note { font-size: 0.75rem; color: var(--primary); margin-top: 4px; font-style: italic; }
+        #notebook-panel .nb-meta { font-size: 0.6rem; color: var(--secondary); margin-top: 4px; opacity: 0.6; }
+        #notebook-panel .nb-page-label { font-size: 0.65rem; font-weight: 700; color: var(--primary); margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid color-mix(in srgb, var(--outline) 60%, transparent); }
+        #notebook-panel .nb-page-label:first-child { margin-top: 0; }
+        #notebook-panel .nb-item-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; opacity: 0; transition: opacity 0.15s; padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--outline) 60%, transparent); }
+        #notebook-panel .nb-item:hover .nb-item-actions { opacity: 1; }
+        #notebook-panel .nb-item-colors { display: flex; gap: 5px; align-items: center; }
+        #notebook-panel .nb-color-pick { width: 12px; height: 12px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; opacity: 0.7; }
+        #notebook-panel .nb-color-pick:hover { opacity: 1; transform: scale(1.15); }
+        #notebook-panel .nb-color-pick.active { border-color: transparent; opacity: 1; transform: scale(1.25); }
+        #notebook-panel .nb-action-btns { display: flex; gap: 4px; }
+        .nb-action-btn { background: none; border: 1px solid transparent; border-radius: 5px; padding: 2px 6px; cursor: pointer; color: var(--secondary); font-size: 0.6rem; transition: all 0.15s; display: flex; align-items: center; gap: 2px; }
+        .nb-action-btn:hover { color: var(--primary); border-color: var(--outline); }
+        .nb-action-btn.nb-delete-btn:hover { color: #EF4444; border-color: #FECACA; }
+        .nb-action-btn svg { width: 11px; height: 11px; }
+        #notebook-panel .nb-item-edit { margin-top: 6px; display: none; }
+        #notebook-panel .nb-item-edit.visible { display: block; }
+        #notebook-panel .nb-item-edit textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--outline); border-radius: 6px; font-size: 0.75rem; font-family: inherit; background: var(--surface); color: var(--on-surface); resize: vertical; min-height: 48px; max-height: 120px; outline: none; }
+        #notebook-panel .nb-item-edit textarea:focus { border-color: var(--primary); }
+        #notebook-panel .nb-edit-btns { display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px; }
+        #notebook-panel .nb-edit-btn { padding: 3px 10px; border-radius: 5px; font-size: 0.65rem; cursor: pointer; border: 1px solid var(--outline); background: var(--surface); color: var(--secondary); transition: all 0.15s; }
+        #notebook-panel .nb-edit-btn:hover { color: var(--primary); border-color: var(--primary); }
+        #notebook-panel .nb-edit-btn.nb-save-btn { background: var(--primary); color: white; border-color: var(--primary); }
+        .nb-action-btn.confirm-state { color: #EF4444; border-color: #EF4444; font-weight: 700; }
+        #notebook-panel .bm-item { padding: 10px 12px; margin-bottom: 8px; border-radius: 10px; cursor: pointer; background: color-mix(in srgb, var(--outline) 50%, transparent); transition: background 0.15s; position: relative; }
+        #notebook-panel .bm-item:hover { background: var(--outline); }
+        #notebook-panel .bm-text { font-size: 0.8rem; line-height: 1.5; color: var(--on-surface); }
+        #notebook-panel .bm-meta { font-size: 0.6rem; color: var(--secondary); margin-top: 4px; opacity: 0.6; }
+        #notebook-panel .bm-delete { position: absolute; top: 8px; right: 8px; background: none; border: none; color: var(--secondary); cursor: pointer; opacity: 0; transition: opacity 0.15s; padding: 2px; border-radius: 4px; }
+        #notebook-panel .bm-item:hover .bm-delete { opacity: 1; }
+        #notebook-panel .bm-delete:hover { color: #EF4444; }
+        #notebook-panel .bm-delete svg { width: 12px; height: 12px; }
+
+        /* --- Resizer --- */
+        .resizer { width: 12px; height: 100%; cursor: col-resize; z-index: 1000; flex-shrink: 0; position: relative; margin: 0 -6px; }
+        .resizer::after { content: ''; position: absolute; left: 5px; top: 0; width: 2px; height: 100%; background: var(--primary); opacity: 0; transition: opacity 0.2s, width 0.2s; }
+        .resizer:hover::after { opacity: 0.2; }
+        .resizer.snap-zone::after { opacity: 0.5; width: 3px; left: 4.5px; }
+        body.is-dragging { user-select: none; }
+        body.is-dragging * { transition: none !important; cursor: col-resize !important; }
+        body.is-dragging #pdf-viewer { pointer-events: none; }
+
+        /* --- Mobile Responsive --- */
         @media (max-width: 768px) {
-            #panels-container {
-                position: fixed; top: 0; right: 0; z-index: 4000;
-                width: 100vw !important; max-width: 400px;
-                height: 100vh; height: 100dvh;
-                background: var(--surface); border-left: 1px solid var(--outline);
-                transform: translateX(100%); transition: transform 0.3s var(--transition);
-            }
+            #sidebar { position: fixed; top: 0; left: 0; z-index: 4000; width: 80vw !important; max-width: 300px; height: 100vh; background: var(--surface); transform: translateX(-100%); transition: transform 0.3s var(--transition); }
+            #sidebar.mobile-open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.15); }
+            #sidebar.collapsed { width: 80vw !important; max-width: 300px; transform: translateX(-100%); }
+            #panels-container { position: fixed; top: 0; right: 0; z-index: 4000; width: 100vw !important; max-width: 400px; height: 100vh; height: 100dvh; background: var(--surface); border-left: 1px solid var(--outline); transform: translateX(100%); transition: transform 0.3s var(--transition); }
             #panels-container.mobile-open { transform: translateX(0); box-shadow: -4px 0 24px rgba(0,0,0,0.15); }
             #panels-container.collapsed { width: 100vw !important; max-width: 400px; transform: translateX(100%); }
             #panels-container.collapsed.mobile-open { transform: translateX(0); }
-
+            .resizer { display: none; }
             .mobile-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 3999; }
             .mobile-overlay.visible { display: block; }
-
             .toggle-group { left: 12px !important; top: 12px; }
             #toggle-right { right: 12px !important; top: 12px; }
-            #panels-container.collapsed ~ #toggle-right { right: 12px; }
+            #stats-bookmark { right: 52px !important; top: 12px; }
             .toggle-btn { width: 40px; height: 40px; border-radius: 14px; }
-
             #selection-toolbar { max-width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center; }
             .sel-btn { padding: 10px 12px; font-size: 0.82rem; min-height: 40px; }
             #lookup-popup { max-width: calc(100vw - 32px); }
-            #settings-panel { left: 50% !important; transform: translateX(-50%); width: calc(100vw - 32px) !important; max-width: 320px; top: 60px; z-index: 4500; }
+            #settings-panel, #search-panel, #notebook-panel { left: 50% !important; transform: translateX(-50%); width: calc(100vw - 32px) !important; max-width: 340px; top: 60px; z-index: 4500; }
             .ai-input-wrap textarea { font-size: 16px; }
         }
         @media (min-width: 769px) and (max-width: 1200px) {
@@ -332,60 +418,109 @@
     </style>
 </head>
 <body>
-    <!-- PDF viewer (main area) -->
+    <!-- Sidebar (TOC) -->
+    <div id="sidebar" class="collapsed">
+        <div class="sidebar-header"><a href="/" class="sidebar-back">Library</a></div>
+        <div class="toc-header" data-i18n="Contents">Contents</div>
+        <div id="toc-content"></div>
+    </div>
+
+    <div id="left-resizer" class="resizer"></div>
+
+    <!-- PDF viewer -->
     <div id="pdf-viewer"></div>
 
-    <!-- AI Panel (right side, matching EPUB reader) -->
-    <div id="panels-container">
-        <div style="display: flex; flex-direction: column; height: 100%;">
+    <div id="right-resizer" class="resizer"></div>
+
+    <!-- AI Panel -->
+    <div id="panels-container" class="collapsed">
+        <div id="ai-panel" style="display: flex; flex-direction: column; height: 100%;">
             <div style="padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
                 <div class="ai-brand">
                     <span class="panel-title">Marginia</span>
                     <span class="panel-subtitle">PDF</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 2px;">
-                    <button onclick="clearChat()" class="icon-btn" title="清空对话"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+                    <button onclick="AI.showSessionList()" class="icon-btn" title="Chat history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></button>
+                    <button onclick="AI.newSession()" class="icon-btn" title="New chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                    <button onclick="AI.clearChat()" class="icon-btn" title="Clear chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
                 </div>
             </div>
             <div class="ai-content" id="ai-content">
                 <div id="ai-empty-state" class="ai-empty">
                     <div class="ai-empty-icon">&#x2728;</div>
-                    <div class="ai-empty-text">选中文字后点击 Ask AI<br>或直接输入问题</div>
+                    <div class="ai-empty-text" data-i18n-html="empty_hint">Select text and click Ask AI<br>or type your own question</div>
                 </div>
                 <div id="ai-chat-history"></div>
             </div>
             <div class="quick-actions">
-                <button class="quick-btn" onclick="quickAction('summarize')">总结内容</button>
-                <button class="quick-btn" onclick="quickAction('explain')">解释难点</button>
-                <button class="quick-btn" onclick="quickAction('translate')">翻译选段</button>
+                <button class="quick-btn" onclick="AI.quick('summarize')" data-i18n="Summarize">Summarize</button>
+                <button class="quick-btn" onclick="AI.quick('concepts')" data-i18n="Key Concepts">Key Concepts</button>
+                <button class="quick-btn" onclick="AI.quick('difficult')" data-i18n="Explain Difficult Parts">Explain Difficult Parts</button>
+                <button class="quick-btn" onclick="AI.quick('reading')" data-i18n="Further Reading">Further Reading</button>
+                <button class="quick-btn" onclick="AI.quick('characters')" data-i18n="Characters">Characters</button>
+                <button class="quick-btn" onclick="AI.quick('insight')" data-i18n="Deep Insight">Deep Insight</button>
+                <button class="quick-btn" onclick="AI.quick('writing')" data-i18n="Writing Style">Writing Style</button>
             </div>
             <div class="ai-input-wrap">
-                <textarea id="ai-input" rows="2" placeholder="输入问题…&#10;Enter 发送 · Shift+Enter 换行" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+                <textarea id="ai-input" rows="2" placeholder="Ask anything about this book…&#10;Enter to send · Shift+Enter for new line" data-i18n-placeholder="ai_placeholder" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();AI.send()}"></textarea>
+            </div>
+            <div id="audio-console">
+                <div class="player-actions">
+                    <button class="player-label" onclick="TTS.showVoiceMenu(this)" title="Voice"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+                    <button class="player-label play-main" id="play-main-btn" onclick="TTS.toggleAll()"><svg viewBox="0 0 24 24" fill="white" stroke="white"><polygon points="7 3 21 12 7 21 7 3"></polygon></svg></button>
+                    <button class="player-label" onclick="TTS.stop()" title="Stop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg></button>
+                    <button class="player-label" onclick="TTS.showSpeedMenu(this)" title="Speed"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Satellite Controls -->
     <div class="toggle-group">
-        <div id="toggle-back" class="toggle-btn" onclick="location.href='/'">
-            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <div id="toggle-left" class="toggle-btn" onclick="toggleSidebar()">
+            <svg class="icon-hamburger" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <svg class="icon-collapse" viewBox="0 0 24 24"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
         </div>
-        <div id="toggle-settings" class="toggle-btn toggle-sub" onclick="toggleSettings()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <div id="toggle-settings" class="toggle-btn toggle-sub" onclick="togglePanel('settings')">
+            <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div id="toggle-search" class="toggle-btn toggle-sub" onclick="togglePanel('search')">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <div id="toggle-notebook" class="toggle-btn toggle-sub" onclick="togglePanel('notebook')">
+            <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         </div>
     </div>
-    <div id="toggle-right" class="toggle-btn" onclick="toggleRight()">
+
+    <!-- Bookmark button -->
+    <div id="stats-bookmark" class="toggle-btn" onclick="Bookmarks.toggleCurrent()">
+        <svg viewBox="0 0 24 24" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </div>
+
+    <!-- AI panel toggle -->
+    <div id="toggle-right" class="toggle-btn rotated" onclick="toggleRight()">
         <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
     </div>
 
-    <!-- Page indicator (floating center) -->
-    <div class="page-indicator" id="page-indicator"></div>
+    <!-- Page indicator -->
+    <div class="page-indicator" id="page-indicator" onclick="PageJump.activate()"></div>
+
+    <!-- Progress bar -->
+    <div id="progress-bar"><div id="progress-fill"></div></div>
 
     <!-- Selection toolbar -->
     <div id="selection-toolbar">
-        <button class="sel-btn" onclick="Sel.lookup()">Look up</button>
-        <button class="sel-btn" onclick="Sel.quickTranslate()">Translate</button>
-        <button class="sel-btn" onclick="Sel.askAI()">Ask AI</button>
+        <button class="sel-btn" onclick="Sel.lookup()" data-i18n="Look up">Look up</button>
+        <button class="sel-btn" onclick="Sel.quickTranslate()" data-i18n="Translate">Translate</button>
+        <div class="sel-divider"></div>
+        <button class="hl-dot yellow" onclick="Sel.highlight('yellow')"></button>
+        <button class="hl-dot green" onclick="Sel.highlight('green')"></button>
+        <button class="hl-dot blue" onclick="Sel.highlight('blue')"></button>
+        <button class="hl-dot pink" onclick="Sel.highlight('pink')"></button>
+        <button class="hl-dot gray" onclick="Sel.highlight('gray')"></button>
+        <div class="sel-divider"></div>
+        <button class="sel-btn" onclick="Sel.askAI()" data-i18n="Ask AI">Ask AI</button>
     </div>
 
     <!-- Lookup popup -->
@@ -397,86 +532,347 @@
     <!-- Settings panel -->
     <div id="settings-panel">
         <div class="setting-section">
-            <div class="setting-label">主题</div>
+            <div class="setting-label" data-i18n="Theme">Theme</div>
             <div class="theme-flex" id="theme-grid"></div>
         </div>
+        <div class="setting-section">
+            <div class="setting-label" data-i18n="Zoom">Zoom</div>
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="Zoom.adjust(-10)">−</button>
+                <span class="zoom-level" id="zoom-level">100%</span>
+                <button class="zoom-btn" onclick="Zoom.adjust(10)">+</button>
+                <button class="zoom-btn" onclick="Zoom.fitWidth()" style="width:auto;padding:0 8px;font-size:0.65rem" data-i18n="Fit Width">Fit</button>
+            </div>
+        </div>
     </div>
+
+    <!-- Search panel -->
+    <div id="search-panel">
+        <input class="sp-input" id="search-input" placeholder="Search in this PDF..." data-i18n-placeholder="Search in full book..." oninput="Search.debounce()">
+        <div class="sp-status" id="search-status"></div>
+        <div class="sp-results" id="search-results"></div>
+    </div>
+
+    <!-- Notebook panel -->
+    <div id="notebook-panel">
+        <div class="nb-tabs">
+            <button class="nb-tab active" data-tab="highlights" onclick="Notebook.switchTab('highlights')" data-i18n="Highlights & Notes">Highlights & Notes</button>
+            <button class="nb-tab" data-tab="bookmarks" onclick="Notebook.switchTab('bookmarks')" data-i18n="Bookmarks">Bookmarks</button>
+        </div>
+        <div id="nb-tab-highlights">
+            <div class="nb-toolbar">
+                <div class="nb-search-wrap"><input class="nb-search" id="nb-search" placeholder="Search highlights..." data-i18n-placeholder="Search highlights..."></div>
+                <div class="nb-filters">
+                    <div class="nb-color-filters" id="nb-color-filters">
+                        <div class="nb-color-dot" style="background:#FACC15" onclick="Notebook.filterColor('yellow',this)"></div>
+                        <div class="nb-color-dot" style="background:#4ADE80" onclick="Notebook.filterColor('green',this)"></div>
+                        <div class="nb-color-dot" style="background:#60A5FA" onclick="Notebook.filterColor('blue',this)"></div>
+                        <div class="nb-color-dot" style="background:#F472B6" onclick="Notebook.filterColor('pink',this)"></div>
+                        <div class="nb-color-dot" style="background:#94A3B8" onclick="Notebook.filterColor('gray',this)"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="nb-highlights-content"></div>
+        </div>
+        <div id="nb-tab-bookmarks" style="display:none">
+            <div id="bm-content"></div>
+        </div>
+    </div>
+
+    <!-- Audio popups -->
+    <div id="voice-popup" class="audio-popup"><div class="audio-popup-list" id="voice-popup-list"></div></div>
+    <div id="speed-popup" class="audio-popup"><div class="speed-slider-wrap" id="speed-slider-wrap"></div></div>
 
     <!-- Mobile overlay -->
     <div class="mobile-overlay" id="mobile-overlay"></div>
 
 <script type="module">
-    // --- PDF.js setup ---
     import { getDocument, GlobalWorkerOptions, TextLayer } from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs';
     GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs';
 
-    const BOOK_ID = '{{ book_id }}';
-    const BOOK_TITLE = '{{ title }}';
+    const BOOK_ID = {{ book_id | tojson }};
+    const BOOK_TITLE = {{ title | tojson }};
     const TOTAL_PAGES = {{ pages }};
+    const OUTLINE = {{ outline_json | safe }};
     const PDF_URL = `/api/pdf-file/${encodeURIComponent(BOOK_ID)}`;
 
     const viewer = document.getElementById('pdf-viewer');
     const pageIndicator = document.getElementById('page-indicator');
 
-    // --- State ---
+    /* ========== i18n ========== */
+    const _lang = (/^zh/i.test(navigator.language)) ? 'zh' : 'en';
+    const _i18n = {
+        'Contents': '目录', 'Theme': '主题', 'Zoom': '缩放', 'Fit Width': '适合宽度',
+        'Summarize': '总结内容', 'Key Concepts': '知识详解', 'Explain Difficult Parts': '难点解析',
+        'Further Reading': '拓展阅读', 'Characters': '人物梳理', 'Deep Insight': '深度洞察', 'Writing Style': '写作手法',
+        'Look up': '查', 'Translate': '译', 'Ask AI': '问AI',
+        'Highlights & Notes': '高亮笔记', 'Bookmarks': '书签',
+        'No highlights yet': '暂无笔记', 'No bookmarks yet': '暂无书签',
+        'Search highlights...': '搜索文字、笔记内容...',
+        'Page': '页', 'Bookmark added': '已添加书签', 'Bookmark removed': '已移除书签',
+        'Delete': '删除', 'Save': '保存', 'Cancel': '取消', 'Edit note': '编辑笔记',
+        'Confirm delete?': '确认删除？',
+        'New chat': '新对话', 'Chat history': '历史记录', 'No chat history': '暂无历史记录',
+        'New Chat': '新对话', 'messages': '条消息', 'Delete this session?': '确定要删除这段对话吗？',
+        'Clear chat': '清空对话', 'Clear all chat history?': '确定要清空所有对话记录吗？',
+        'Notebook': '读书笔记', 'current': '当前页',
+        'Search in full book...': '在全书中搜索...', 'Searching...': '搜索中...',
+        'results found': '个结果', 'No results found': '未找到结果',
+        'Playback speed': '播放速度', 'Voice': '语音角色',
+        'Mandarin': '普通话', 'Dialect': '方言', 'English · US': '英语 · 美音', 'English · UK': '英语 · 英音',
+        'Xiaoxiao · F': '晓晓 · 女', 'Yunxi · M': '云希 · 男', 'Yunyang · M': '云扬 · 男',
+        'Ava · F': 'Ava · 女', 'Andrew · M': 'Andrew · 男', 'Sonia · F': 'Sonia · 女', 'Ryan · M': 'Ryan · 男',
+        'Marginia': '知白',
+        'your AI reading companion': '你的AI书伴，一起读懂字里行间。',
+        'Try a quick action below': '试试下方的快捷操作',
+        'or type your own question': '或直接输入你的问题',
+        'Pronounce': '发音', 'Read aloud': '朗读', 'Stop': '停止',
+    };
+    function t(key) { return (_lang === 'zh' && _i18n[key]) ? _i18n[key] : key; }
+    function _md(s) {
+        if (!s) return s;
+        return s.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h3>$1</h3>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
+            .replace(/^[-*] (.+)$/gm, '<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/gs, '<ul>$&</ul>')
+            .replace(/\n{2,}/g, '</p><p>').replace(/^(?!<[hupol])(.+)/gm, '<p>$1</p>').replace(/<p><\/p>/g, '');
+    }
+    // Apply i18n
+    if (_lang === 'zh') {
+        document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.dataset.i18n; if (_i18n[k]) el.textContent = _i18n[k]; });
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { const k = el.dataset.i18nPlaceholder; if (_i18n[k]) el.placeholder = _i18n[k]; });
+        const emptyHint = document.querySelector('[data-i18n-html="empty_hint"]');
+        if (emptyHint) emptyHint.innerHTML = t('Try a quick action below') + '<br>' + t('or type your own question');
+        const aiInput = document.getElementById('ai-input');
+        aiInput.placeholder = '读到这里，有什么想聊的吗？\nEnter 发送 · Shift+Enter 换行';
+    }
+
+    /* ========== State ========== */
     let pdfDoc = null;
     const pageContainers = [];
     const pageRendered = [];
     const pageHeights = [];
     let renderingPages = new Set();
+    let currentPage = 1;
+    let zoomLevel = parseInt(localStorage.getItem(`pdf_zoom_${BOOK_ID}`)) || 0; // 0 = fit width
+
+    /* ========== Zoom Module ========== */
+    const Zoom = {
+        _pct: 100,
+        adjust(delta) {
+            this._pct = Math.max(50, Math.min(200, this._pct + delta));
+            zoomLevel = this._pct;
+            localStorage.setItem(`pdf_zoom_${BOOK_ID}`, this._pct);
+            document.getElementById('zoom-level').textContent = this._pct + '%';
+            this._rerender();
+        },
+        fitWidth() {
+            zoomLevel = 0;
+            localStorage.setItem(`pdf_zoom_${BOOK_ID}`, '0');
+            this._pct = Math.round((getPageWidth() / this._baseWidth) * 100) || 100;
+            document.getElementById('zoom-level').textContent = t('Fit Width');
+            this._rerender();
+        },
+        _baseWidth: 612, // typical PDF page width in points
+        _rerender() {
+            pageRendered.fill(false);
+            renderingPages.clear();
+            pageContainers.forEach((c, i) => {
+                const w = this._getWidth();
+                c.style.width = w + 'px';
+                c.style.height = (w * 1.414) + 'px';
+                c.innerHTML = '';
+            });
+            // Re-observe to trigger rendering of visible pages
+            const obs = new IntersectionObserver((entries) => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting) renderPage(parseInt(entry.target.dataset.pageNum));
+                }
+            }, { root: viewer, rootMargin: '800px 0px' });
+            pageContainers.forEach(c => obs.observe(c));
+        },
+        _getWidth() {
+            if (zoomLevel === 0) return getPageWidth();
+            return Math.round(this._baseWidth * (this._pct / 100));
+        },
+        init() {
+            if (zoomLevel > 0) {
+                this._pct = zoomLevel;
+                document.getElementById('zoom-level').textContent = this._pct + '%';
+            } else {
+                document.getElementById('zoom-level').textContent = t('Fit Width');
+            }
+        }
+    };
+    window.Zoom = Zoom;
 
     function getPageWidth() {
         return Math.min(window.innerWidth - 40, 900);
     }
 
-    // --- Load PDF ---
+    /* ========== TOC Module ========== */
+    const TOC = {
+        init() {
+            const content = document.getElementById('toc-content');
+            if (OUTLINE.length > 0) {
+                content.innerHTML = this._buildTree(OUTLINE);
+                // Default: collapse level 2+ children (only L1 visible)
+                content.querySelectorAll('.toc-children').forEach(el => {
+                    el.classList.add('collapsed');
+                });
+                // Set toggle state for unexpanded parents
+                content.querySelectorAll('.toc-toggle').forEach(tog => {
+                    const children = tog.closest('.toc-group').querySelector('.toc-children');
+                    if (children && !children.classList.contains('collapsed')) tog.classList.add('expanded');
+                });
+            } else {
+                let html = '<div class="toc-page-list">';
+                for (let i = 1; i <= TOTAL_PAGES; i++) {
+                    html += `<div class="toc-page-item" data-page="${i}" onclick="TOC.goTo(${i})">${t('Page')} ${i}</div>`;
+                }
+                html += '</div>';
+                content.innerHTML = html;
+            }
+        },
+        _buildTree(outline) {
+            // Build a nested tree structure from flat outline
+            const root = []; const stack = [{ level: 0, children: root }];
+            outline.forEach((item, idx) => {
+                const node = { ...item, idx, children: [] };
+                while (stack.length > 1 && stack[stack.length - 1].level >= item.level) stack.pop();
+                stack[stack.length - 1].children.push(node);
+                stack.push({ level: item.level, children: node.children });
+            });
+            return this._renderNodes(root, 1);
+        },
+        _renderNodes(nodes, level) {
+            let html = '';
+            nodes.forEach(node => {
+                const hasChildren = node.children && node.children.length > 0;
+                const levelCls = node.level > 1 ? ` level-${Math.min(node.level, 5)}` : '';
+                const chevron = `<span class="toc-toggle" onclick="event.stopPropagation();TOC.toggle(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>`;
+                html += `<div class="toc-group">`;
+                html += `<div class="toc-item${levelCls}" data-page="${node.page}" data-idx="${node.idx}" data-has-children="${hasChildren}" onclick="TOC.onItemClick(this, ${node.page})">`;
+                html += `<span class="toc-title">${node.title}</span>`;
+                if (hasChildren) html += chevron;
+                html += `</div>`;
+                if (hasChildren) {
+                    html += `<div class="toc-children" data-level="${node.children[0].level}">`;
+                    html += this._renderNodes(node.children, level + 1);
+                    html += `</div>`;
+                }
+                html += `</div>`;
+            });
+            return html;
+        },
+        toggle(toggleEl) {
+            const group = toggleEl.closest('.toc-group');
+            const children = group.querySelector('.toc-children');
+            if (!children) return;
+            children.classList.toggle('collapsed');
+            toggleEl.classList.toggle('expanded');
+        },
+        onItemClick(el, page) {
+            TOC.goTo(page);
+            if (el.dataset.hasChildren === 'true') {
+                const group = el.closest('.toc-group');
+                const children = group.querySelector('.toc-children');
+                const toggle = el.querySelector('.toc-toggle');
+                if (children) children.classList.toggle('collapsed');
+                if (toggle) toggle.classList.toggle('expanded');
+            }
+        },
+        goTo(page) {
+            TOC._userClick = true;
+            const container = pageContainers[page - 1];
+            if (container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => { TOC._userClick = false; }, 800);
+        },
+        updateActive(page) {
+            if (OUTLINE.length > 0) {
+                const items = document.querySelectorAll('.toc-item');
+                let activeIdx = -1;
+                OUTLINE.forEach((item, idx) => { if (item.page <= page) activeIdx = idx; });
+                items.forEach(el => el.classList.toggle('active', parseInt(el.dataset.idx) === activeIdx));
+                // Auto-expand parent if active item is in a collapsed group
+                const activeEl = document.querySelector('.toc-item.active');
+                if (activeEl) {
+                    let parent = activeEl.closest('.toc-children');
+                    while (parent) {
+                        if (parent.classList.contains('collapsed')) {
+                            parent.classList.remove('collapsed');
+                            const toggle = parent.previousElementSibling?.querySelector('.toc-toggle');
+                            if (toggle) toggle.classList.add('expanded');
+                        }
+                        parent = parent.parentElement?.closest('.toc-children');
+                    }
+                    if (!TOC._userClick) activeEl.scrollIntoView({ block: 'nearest' });
+                }
+            } else {
+                document.querySelectorAll('.toc-page-item').forEach(el => {
+                    el.classList.toggle('active', parseInt(el.dataset.page) === page);
+                });
+            }
+        }
+    };
+    window.TOC = TOC;
+
+    /* ========== PDF Loading ========== */
     async function init() {
-        pageIndicator.textContent = '加载中...';
-        try {
-            pdfDoc = await getDocument(PDF_URL).promise;
-        } catch (e) {
+        pageIndicator.textContent = '...';
+        try { pdfDoc = await getDocument(PDF_URL).promise; } catch (e) {
             viewer.innerHTML = `<div class="page-loading" style="color:#EF4444">加载失败: ${e.message}</div>`;
             return;
         }
-
         const totalPages = pdfDoc.numPages;
-        pageIndicator.textContent = `${totalPages} 页`;
+        // Get first page to determine base width
+        const firstPage = await pdfDoc.getPage(1);
+        const vp0 = firstPage.getViewport({ scale: 1 });
+        Zoom._baseWidth = vp0.width;
+        Zoom.init();
 
         for (let i = 1; i <= totalPages; i++) {
             const container = document.createElement('div');
             container.className = 'pdf-page-container';
             container.dataset.pageNum = i;
-            const estWidth = getPageWidth();
-            const estHeight = estWidth * 1.414;
-            container.style.width = estWidth + 'px';
-            container.style.height = estHeight + 'px';
+            const w = Zoom._getWidth();
+            container.style.width = w + 'px';
+            container.style.height = (w * (vp0.height / vp0.width)) + 'px';
             viewer.appendChild(container);
             pageContainers.push(container);
             pageRendered.push(false);
-            pageHeights.push(estHeight);
+            pageHeights.push(w * (vp0.height / vp0.width));
         }
 
         const observer = new IntersectionObserver((entries) => {
             for (const entry of entries) {
-                if (entry.isIntersecting) {
-                    const pageNum = parseInt(entry.target.dataset.pageNum);
-                    renderPage(pageNum);
-                }
+                if (entry.isIntersecting) renderPage(parseInt(entry.target.dataset.pageNum));
             }
         }, { root: viewer, rootMargin: '800px 0px' });
-
         pageContainers.forEach(c => observer.observe(c));
-        viewer.addEventListener('scroll', updatePageIndicator, { passive: true });
-        viewer.addEventListener('scroll', autoHideControls, { passive: true });
+
+        viewer.addEventListener('scroll', onScroll, { passive: true });
+
+        // Restore position
+        const saved = localStorage.getItem(`pdf_position_${BOOK_ID}`);
+        if (saved) {
+            try {
+                const pos = JSON.parse(saved);
+                if (pos.scrollTop) setTimeout(() => { viewer.scrollTop = pos.scrollTop; }, 100);
+            } catch(e) {}
+        }
+
+        updatePageIndicator();
+        TOC.init();
     }
 
     async function renderPage(pageNum) {
         if (pageRendered[pageNum - 1] || renderingPages.has(pageNum)) return;
         renderingPages.add(pageNum);
-
         try {
             const page = await pdfDoc.getPage(pageNum);
-            const desiredWidth = getPageWidth();
+            const desiredWidth = Zoom._getWidth();
             const viewport0 = page.getViewport({ scale: 1 });
             const scale = desiredWidth / viewport0.width;
             const viewport = page.getViewport({ scale });
@@ -484,7 +880,6 @@
             const container = pageContainers[pageNum - 1];
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-
             const dpr = window.devicePixelRatio || 1;
             canvas.width = Math.floor(viewport.width * dpr);
             canvas.height = Math.floor(viewport.height * dpr);
@@ -500,21 +895,26 @@
 
             await page.render({ canvasContext: ctx, viewport }).promise;
 
-            // Text layer for selection
+            // Text layer
             const textContent = await page.getTextContent();
             const textLayerDiv = document.createElement('div');
             textLayerDiv.className = 'textLayer';
             container.appendChild(textLayerDiv);
-
-            const textLayer = new TextLayer({
-                textContentSource: textContent,
-                container: textLayerDiv,
-                viewport: viewport,
-            });
+            const textLayer = new TextLayer({ textContentSource: textContent, container: textLayerDiv, viewport });
             await textLayer.render();
+
+            // Highlight overlay layer
+            const hlLayer = document.createElement('div');
+            hlLayer.className = 'pdf-highlight-layer';
+            container.appendChild(hlLayer);
 
             pageRendered[pageNum - 1] = true;
             pageHeights[pageNum - 1] = viewport.height;
+
+            // Restore highlights for this page
+            Highlights.renderPage(pageNum);
+            // Restore search highlights
+            Search.renderPageHighlights(pageNum);
         } catch (e) {
             console.error(`Failed to render page ${pageNum}:`, e);
         } finally {
@@ -522,30 +922,45 @@
         }
     }
 
+    /* ========== Scroll Handling ========== */
+    let _scrollTimer = null, _lastScrollTop = 0, _positionTimer = null;
+    function onScroll() {
+        updatePageIndicator();
+        autoHideControls();
+        // Debounce position save
+        clearTimeout(_positionTimer);
+        _positionTimer = setTimeout(() => {
+            localStorage.setItem(`pdf_position_${BOOK_ID}`, JSON.stringify({ page: currentPage, scrollTop: viewer.scrollTop }));
+        }, 500);
+    }
     function updatePageIndicator() {
         const scrollTop = viewer.scrollTop;
         const viewerMid = scrollTop + viewer.clientHeight / 2;
         let cumHeight = 0;
         for (let i = 0; i < pageContainers.length; i++) {
-            const h = pageContainers[i].offsetHeight + 8;
-            cumHeight += h;
+            cumHeight += pageContainers[i].offsetHeight + 8;
             if (cumHeight > viewerMid) {
+                currentPage = i + 1;
                 pageIndicator.textContent = `${i + 1} / ${pageContainers.length}`;
+                TOC.updateActive(i + 1);
+                // Update progress
+                const pct = ((i + 1) / pageContainers.length * 100).toFixed(1);
+                document.getElementById('progress-fill').style.width = pct + '%';
+                // Update bookmark button
+                Bookmarks._updateBtn();
                 return;
             }
         }
+        currentPage = pageContainers.length;
         pageIndicator.textContent = `${pageContainers.length} / ${pageContainers.length}`;
+        document.getElementById('progress-fill').style.width = '100%';
     }
-
-    // --- Auto-hide controls on scroll ---
-    let _scrollTimer = null;
-    let _lastScrollTop = 0;
     function autoHideControls() {
         const st = viewer.scrollTop;
-        const delta = Math.abs(st - _lastScrollTop);
-        if (delta > 30) {
+        if (Math.abs(st - _lastScrollTop) > 30) {
             document.querySelector('.toggle-group').classList.add('auto-hidden');
             document.getElementById('toggle-right').classList.add('auto-hidden');
+            document.getElementById('stats-bookmark').classList.add('auto-hidden');
             pageIndicator.classList.add('auto-hidden');
         }
         _lastScrollTop = st;
@@ -553,47 +968,266 @@
         _scrollTimer = setTimeout(() => {
             document.querySelector('.toggle-group').classList.remove('auto-hidden');
             document.getElementById('toggle-right').classList.remove('auto-hidden');
+            document.getElementById('stats-bookmark').classList.remove('auto-hidden');
             pageIndicator.classList.remove('auto-hidden');
         }, 1200);
     }
 
-    // --- Selection module ---
+    /* ========== Highlights Module ========== */
+    const Highlights = {
+        _key: `pdf_highlights_${BOOK_ID}`,
+        _data: { items: [] },
+        load() {
+            try {
+                const raw = localStorage.getItem(this._key);
+                if (raw) { const parsed = JSON.parse(raw); if (parsed?.items) this._data = parsed; }
+            } catch(e) {}
+        },
+        save() { try { localStorage.setItem(this._key, JSON.stringify(this._data)); } catch(e) {} },
+        add(page, text, rects, color) {
+            const id = 'h_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+            const item = { id, page, text, rects, color: color || 'yellow', note: '', createdAt: Date.now() };
+            this._data.items.push(item);
+            this.save();
+            this.renderPage(page);
+            return id;
+        },
+        updateColor(id, color) {
+            const item = this._data.items.find(i => i.id === id);
+            if (item) { item.color = color; this.save(); this.renderPage(item.page); }
+        },
+        updateNote(id, note) {
+            const item = this._data.items.find(i => i.id === id);
+            if (item) { item.note = note; this.save(); }
+        },
+        remove(id) {
+            const item = this._data.items.find(i => i.id === id);
+            if (!item) return;
+            const page = item.page;
+            this._data.items = this._data.items.filter(i => i.id !== id);
+            this.save();
+            this.renderPage(page);
+        },
+        getAll() { return this._data.items; },
+        getForPage(page) { return this._data.items.filter(i => i.page === page); },
+        renderPage(pageNum) {
+            const container = pageContainers[pageNum - 1];
+            if (!container) return;
+            let hlLayer = container.querySelector('.pdf-highlight-layer');
+            if (!hlLayer) return;
+            // Clear existing highlights
+            hlLayer.querySelectorAll('.pdf-hl-rect').forEach(el => el.remove());
+            const items = this.getForPage(pageNum);
+            const cw = container.offsetWidth, ch = container.offsetHeight;
+            items.forEach(item => {
+                if (!item.rects) return;
+                item.rects.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = `pdf-hl-rect hl-${item.color}`;
+                    div.style.left = (r[0] / r[4] * cw) + 'px';
+                    div.style.top = (r[1] / r[5] * ch) + 'px';
+                    div.style.width = ((r[2] - r[0]) / r[4] * cw) + 'px';
+                    div.style.height = ((r[3] - r[1]) / r[5] * ch) + 'px';
+                    div.dataset.hlId = item.id;
+                    div.onclick = () => Notebook.showForHighlight(item.id);
+                    hlLayer.appendChild(div);
+                });
+            });
+        }
+    };
+    window.Highlights = Highlights;
+
+    /* ========== Bookmarks Module ========== */
+    const Bookmarks = {
+        _key: `pdf_bookmarks_${BOOK_ID}`,
+        _data: { items: [] },
+        load() {
+            try {
+                const raw = localStorage.getItem(this._key);
+                if (raw) { const parsed = JSON.parse(raw); if (parsed?.items) this._data = parsed; }
+            } catch(e) {}
+        },
+        save() { localStorage.setItem(this._key, JSON.stringify(this._data)); },
+        add(page) {
+            if (this._data.items.some(i => i.page === page)) return;
+            this._data.items.push({ page, createdAt: Date.now() });
+            this.save();
+        },
+        remove(page) {
+            this._data.items = this._data.items.filter(i => i.page !== page);
+            this.save();
+        },
+        has(page) { return this._data.items.some(i => i.page === page); },
+        getAll() { return this._data.items.sort((a, b) => a.page - b.page); },
+        toggleCurrent() {
+            const page = currentPage;
+            const btn = document.getElementById('stats-bookmark');
+            if (this.has(page)) {
+                this.remove(page);
+                btn.classList.remove('bookmarked');
+                this._flash(t('Bookmark removed'));
+            } else {
+                this.add(page);
+                btn.classList.add('bookmarked');
+                this._flash(t('Bookmark added'));
+            }
+        },
+        _updateBtn() {
+            const btn = document.getElementById('stats-bookmark');
+            btn.classList.toggle('bookmarked', this.has(currentPage));
+        },
+        _flash(msg) {
+            const tip = document.createElement('div');
+            tip.textContent = msg;
+            tip.style.cssText = `position:fixed;top:60px;right:24px;background:var(--on-surface);color:var(--surface);padding:6px 14px;border-radius:8px;font-size:0.75rem;font-weight:600;z-index:9999;pointer-events:none;opacity:0;transition:opacity 0.2s;`;
+            document.body.appendChild(tip);
+            requestAnimationFrame(() => { tip.style.opacity = '1'; });
+            setTimeout(() => { tip.style.opacity = '0'; setTimeout(() => tip.remove(), 200); }, 1200);
+        }
+    };
+    window.Bookmarks = Bookmarks;
+
+    /* ========== Notebook Module ========== */
+    const Notebook = {
+        _tab: 'highlights',
+        _colorFilter: null,
+        switchTab(tab) {
+            this._tab = tab;
+            document.querySelectorAll('.nb-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            document.getElementById('nb-tab-highlights').style.display = tab === 'highlights' ? '' : 'none';
+            document.getElementById('nb-tab-bookmarks').style.display = tab === 'bookmarks' ? '' : 'none';
+            if (tab === 'bookmarks') this.renderBookmarks();
+            else this.renderHighlights();
+        },
+        filterColor(color, el) {
+            if (this._colorFilter === color) {
+                this._colorFilter = null;
+                el.classList.remove('active');
+            } else {
+                this._colorFilter = color;
+                document.querySelectorAll('#nb-color-filters .nb-color-dot').forEach(d => d.classList.remove('active'));
+                el.classList.add('active');
+            }
+            this.renderHighlights();
+        },
+        renderHighlights() {
+            const container = document.getElementById('nb-highlights-content');
+            const searchVal = (document.getElementById('nb-search')?.value || '').toLowerCase();
+            let items = Highlights.getAll();
+            if (this._colorFilter) items = items.filter(i => i.color === this._colorFilter);
+            if (searchVal) items = items.filter(i => (i.text || '').toLowerCase().includes(searchVal) || (i.note || '').toLowerCase().includes(searchVal));
+            if (!items.length) { container.innerHTML = `<div class="nb-empty">${t('No highlights yet')}</div>`; return; }
+
+            // Group by page
+            const pages = new Map();
+            items.forEach(item => {
+                if (!pages.has(item.page)) pages.set(item.page, []);
+                pages.get(item.page).push(item);
+            });
+            const colorMap = { yellow: '#FACC15', green: '#4ADE80', blue: '#60A5FA', pink: '#F472B6', gray: '#94A3B8' };
+            let html = '';
+            for (const [page, group] of [...pages].sort((a, b) => a[0] - b[0])) {
+                const isCurrent = page === currentPage;
+                html += `<div class="nb-page-label">${t('Page')} ${page}${isCurrent ? ` <span style="opacity:0.4;font-weight:400">· ${t('current')}</span>` : ''}</div>`;
+                group.forEach(item => {
+                    const timeStr = new Date(item.createdAt).toLocaleString(_lang === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const textPreview = (item.text || '').slice(0, 80) + (item.text?.length > 80 ? '...' : '');
+                    html += `<div class="nb-item" onclick="TOC.goTo(${page})">
+                        <div class="nb-text" style="border-left:3px solid ${colorMap[item.color] || '#FACC15'};padding-left:8px">${textPreview}</div>
+                        ${item.note ? `<div class="nb-note">${item.note}</div>` : ''}
+                        <div class="nb-meta">${timeStr}</div>
+                        <div class="nb-item-actions">
+                            <div class="nb-item-colors">
+                                ${Object.entries(colorMap).map(([c, hex]) => `<div class="nb-color-pick${item.color === c ? ' active' : ''}" style="background:${hex}" onclick="event.stopPropagation();Highlights.updateColor('${item.id}','${c}');Notebook.renderHighlights()"></div>`).join('')}
+                            </div>
+                            <div class="nb-action-btns">
+                                <button class="nb-action-btn" onclick="event.stopPropagation();Notebook.editNote('${item.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>${t('Edit note')}</button>
+                                <button class="nb-action-btn nb-delete-btn" onclick="event.stopPropagation();Notebook.deleteHighlight('${item.id}',this)">${t('Delete')}</button>
+                            </div>
+                        </div>
+                        <div class="nb-item-edit" id="edit-${item.id}">
+                            <textarea id="edit-text-${item.id}" placeholder="${t('Edit note')}...">${item.note || ''}</textarea>
+                            <div class="nb-edit-btns">
+                                <button class="nb-edit-btn" onclick="event.stopPropagation();document.getElementById('edit-${item.id}').classList.remove('visible')">${t('Cancel')}</button>
+                                <button class="nb-edit-btn nb-save-btn" onclick="event.stopPropagation();Notebook.saveNote('${item.id}')">${t('Save')}</button>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+            }
+            container.innerHTML = html;
+        },
+        editNote(id) {
+            const el = document.getElementById(`edit-${id}`);
+            if (el) { el.classList.toggle('visible'); el.querySelector('textarea')?.focus(); }
+        },
+        saveNote(id) {
+            const text = document.getElementById(`edit-text-${id}`)?.value?.trim() || '';
+            Highlights.updateNote(id, text);
+            this.renderHighlights();
+        },
+        deleteHighlight(id, btn) {
+            if (!btn.classList.contains('confirm-state')) {
+                btn.classList.add('confirm-state');
+                btn.textContent = t('Confirm delete?');
+                setTimeout(() => { if (btn.isConnected) { btn.classList.remove('confirm-state'); btn.textContent = t('Delete'); } }, 3000);
+                return;
+            }
+            Highlights.remove(id);
+            this.renderHighlights();
+        },
+        showForHighlight(id) {
+            togglePanel('notebook');
+            this.switchTab('highlights');
+        },
+        renderBookmarks() {
+            const container = document.getElementById('bm-content');
+            const items = Bookmarks.getAll();
+            if (!items.length) { container.innerHTML = `<div class="nb-empty">${t('No bookmarks yet')}</div>`; return; }
+            let html = '';
+            items.forEach(item => {
+                const isCurrent = item.page === currentPage;
+                const timeStr = new Date(item.createdAt).toLocaleString(_lang === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                html += `<div class="bm-item" onclick="TOC.goTo(${item.page})">
+                    <div class="bm-text">🔖 ${t('Page')} ${item.page}${isCurrent ? ` (${t('current')})` : ''}</div>
+                    <div class="bm-meta">${timeStr}</div>
+                    <button class="bm-delete" onclick="event.stopPropagation();Bookmarks.remove(${item.page});Bookmarks._updateBtn();Notebook.renderBookmarks()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+    };
+    window.Notebook = Notebook;
+    document.getElementById('nb-search')?.addEventListener('input', () => Notebook.renderHighlights());
+
+    /* ========== Selection Module ========== */
     const Sel = {
-        _selText: null,
-        _selRect: null,
-        _speakPlayer: null,
+        _selText: null, _selRect: null, _selRects: null, _selPage: null,
 
         init() {
             const toolbar = document.getElementById('selection-toolbar');
             const lookup = document.getElementById('lookup-popup');
 
-            viewer.addEventListener('mouseup', () => {
-                setTimeout(() => this._checkSelection(), 10);
-            });
-
+            viewer.addEventListener('mouseup', () => { setTimeout(() => this._check(), 10); });
             let _selTimer = null;
             document.addEventListener('selectionchange', () => {
                 if (!('ontouchstart' in window)) return;
                 clearTimeout(_selTimer);
                 _selTimer = setTimeout(() => {
                     const sel = window.getSelection();
-                    if (!sel.toString().trim()) return;
-                    if (!viewer.contains(sel.anchorNode)) return;
-                    this._checkSelection();
+                    if (!sel.toString().trim() || !viewer.contains(sel.anchorNode)) return;
+                    this._check();
                 }, 300);
             });
-
             document.addEventListener('mousedown', (e) => {
                 if (!toolbar.contains(e.target)) toolbar.classList.remove('visible');
                 if (!lookup.contains(e.target) && !toolbar.contains(e.target)) lookup.classList.remove('visible');
             });
-
-            viewer.addEventListener('scroll', () => {
-                toolbar.classList.remove('visible');
-            }, { passive: true });
+            viewer.addEventListener('scroll', () => { toolbar.classList.remove('visible'); }, { passive: true });
         },
-
-        _checkSelection() {
+        _check() {
             const sel = window.getSelection();
             const text = sel.toString().trim();
             if (!text || text.length < 1) return;
@@ -604,286 +1238,689 @@
             const rect = range.getBoundingClientRect();
             this._selRect = { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height };
 
+            // Capture selection rects relative to page for highlighting
+            const pageContainer = sel.anchorNode.parentElement?.closest('.pdf-page-container');
+            if (pageContainer) {
+                this._selPage = parseInt(pageContainer.dataset.pageNum);
+                const pageRect = pageContainer.getBoundingClientRect();
+                const pw = pageContainer.offsetWidth, ph = pageContainer.offsetHeight;
+                const rects = [];
+                const clientRects = range.getClientRects();
+                for (let i = 0; i < clientRects.length; i++) {
+                    const cr = clientRects[i];
+                    rects.push([
+                        cr.left - pageRect.left, cr.top - pageRect.top,
+                        cr.right - pageRect.left, cr.bottom - pageRect.top,
+                        pw, ph
+                    ]);
+                }
+                this._selRects = rects;
+            }
+
             const toolbar = document.getElementById('selection-toolbar');
             toolbar.classList.remove('visible');
             void toolbar.offsetWidth;
-
-            toolbar.style.visibility = 'hidden';
-            toolbar.classList.add('visible');
-            const tbWidth = toolbar.offsetWidth;
-            const tbHeight = toolbar.offsetHeight;
+            toolbar.style.visibility = 'hidden'; toolbar.classList.add('visible');
+            const tbW = toolbar.offsetWidth, tbH = toolbar.offsetHeight;
             toolbar.style.visibility = '';
 
-            let top = rect.top - tbHeight - 15;
-            let left = rect.left + (rect.width / 2) - (tbWidth / 2);
-            const vpHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-
+            let top = rect.top - tbH - 15;
+            let left = rect.left + (rect.width / 2) - (tbW / 2);
             if (top < 10) top = rect.bottom + 8;
-            if (top + tbHeight > vpHeight - 8) {
-                top = rect.top - tbHeight - 15;
-                if (top < 10) top = 10;
-            }
-            left = Math.max(8, Math.min(left, window.innerWidth - tbWidth - 8));
-
-            toolbar.style.top = top + 'px';
-            toolbar.style.left = left + 'px';
+            if (top + tbH > window.innerHeight - 8) top = Math.max(10, rect.top - tbH - 15);
+            left = Math.max(8, Math.min(left, window.innerWidth - tbW - 8));
+            toolbar.style.top = top + 'px'; toolbar.style.left = left + 'px';
             toolbar.classList.add('visible');
 
-            // Auto-translate short words/phrases
+            // Auto-translate short text
             const wordCount = text.split(/\s+/).length;
             if (wordCount <= 3 && text.length <= 40 && !text.includes('\n')) {
                 const clean = text.replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu, '');
                 if (clean) this._doTranslate(clean);
             }
         },
-
-        _hide() {
+        highlight(color) {
+            if (!this._selText || !this._selRects || !this._selPage) return;
+            Highlights.add(this._selPage, this._selText, this._selRects, color);
             document.getElementById('selection-toolbar').classList.remove('visible');
+            window.getSelection().removeAllRanges();
         },
-
         quickTranslate() {
-            const text = this._selText;
-            if (!text) return;
-            this._hide();
+            if (!this._selText) return;
+            document.getElementById('selection-toolbar').classList.remove('visible');
             window.getSelection().removeAllRanges();
-            this._doTranslate(text);
+            this._doTranslate(this._selText);
         },
-
         lookup() {
-            const text = this._selText;
-            if (!text) return;
-            this._hide();
+            if (!this._selText) return;
+            document.getElementById('selection-toolbar').classList.remove('visible');
             window.getSelection().removeAllRanges();
-            this._doLookup(text);
+            this._doLookup(this._selText);
         },
-
         askAI() {
-            const text = this._selText;
-            if (!text) return;
-            this._hide();
+            if (!this._selText) return;
+            document.getElementById('selection-toolbar').classList.remove('visible');
             window.getSelection().removeAllRanges();
-            // Open panel with context
             const panel = document.getElementById('panels-container');
             if (panel.classList.contains('collapsed')) toggleRight();
-            _aiContext = text;
-            _addContextBubble(text);
+            AI._addContext(this._selText);
             document.getElementById('ai-input').focus();
         },
-
-        closeLookup() {
-            document.getElementById('lookup-popup').classList.remove('visible');
-        },
-
+        closeLookup() { document.getElementById('lookup-popup').classList.remove('visible'); },
         _speak(text) {
-            if (this._speakPlayer) { this._speakPlayer.pause(); this._speakPlayer = null; }
             const cjk = [...text].filter(c => c >= '\u4e00' && c <= '\u9fff').length;
             const voice = cjk > text.length * 0.3 ? 'zh-CN-XiaoxiaoNeural' : 'en-US-JennyNeural';
-            const a = new Audio(`/api/tts?text=${encodeURIComponent(text.substring(0, 500))}&voice=${voice}`);
-            this._speakPlayer = a;
-            a.onended = () => { this._speakPlayer = null; };
-            a.play().catch(() => {});
+            new Audio(`/api/tts?text=${encodeURIComponent(text.substring(0, 500))}&voice=${voice}`).play().catch(() => {});
         },
-
         async _doTranslate(text) {
-            const contentEl = document.getElementById('lookup-content');
-            contentEl.innerHTML = '<div class="lookup-loading">翻译中...</div>';
+            const el = document.getElementById('lookup-content');
+            el.innerHTML = '<div class="lookup-loading">翻译中...</div>';
             this._showLookup();
             try {
-                const resp = await fetch('/api/quick-translate', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
-                });
+                const resp = await fetch('/api/quick-translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
                 const data = await resp.json();
                 let html = '';
-                const safeText = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
-                const speakBtn = `<button onclick="Sel._speak('${safeText}')" style="background:none;border:none;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:0.5;transition:opacity 0.2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" title="发音"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>`;
-
+                const safe = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
+                const spk = `<button onclick="Sel._speak('${safe}')" style="background:none;border:none;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:0.5;transition:opacity 0.2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" title="${t('Pronounce')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>`;
                 if (data.source === 'dict') {
                     html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${data.word}</b>`;
                     if (data.phonetic) html += ` <span style="opacity:0.6">/${data.phonetic}/</span>`;
-                    html += ` ${speakBtn}</div>`;
+                    html += ` ${spk}</div>`;
                     if (data.translation) html += `<div class="lookup-translation">${data.translation.replace(/\n/g, '<br>')}</div>`;
                     if (data.definition) html += `<div class="lookup-explanation" style="margin-top:6px;font-size:0.78rem">${data.definition.split('\n').slice(0, 2).join('<br>')}</div>`;
                 } else if (data.source === 'cn-dict' || data.source === 'ai-dict') {
                     html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${data.word}</b>`;
                     if (data.pinyin) html += ` <span style="opacity:0.6">${data.pinyin}</span>`;
-                    html += ` ${speakBtn}</div>`;
+                    html += ` ${spk}</div>`;
                     html += `<div class="lookup-translation">${data.translation.replace(/\n/g, '<br>')}</div>`;
                 } else if (data.translation) {
-                    html += `<div class="lookup-translation">${data.translation} ${speakBtn}</div>`;
+                    html += `<div class="lookup-translation">${data.translation} ${spk}</div>`;
                 }
-
-                contentEl.innerHTML = html || '<div class="lookup-loading">无结果</div>';
+                el.innerHTML = html || '<div class="lookup-loading">无结果</div>';
                 this._showLookup();
-            } catch (e) {
-                contentEl.innerHTML = '<div class="lookup-loading">翻译失败</div>';
-            }
+            } catch (e) { el.innerHTML = '<div class="lookup-loading">翻译失败</div>'; }
         },
-
         async _doLookup(text) {
-            const contentEl = document.getElementById('lookup-content');
-            contentEl.innerHTML = '<div class="lookup-loading">查询中...</div>';
+            const el = document.getElementById('lookup-content');
+            el.innerHTML = '<div class="lookup-loading">查询中...</div>';
             this._showLookup();
             try {
-                const resp = await fetch('/api/wiki-lookup', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text })
-                });
+                const resp = await fetch('/api/wiki-lookup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
                 const data = await resp.json();
                 let html = '';
-                if (data.title)   html += `<div class="lookup-translation">${data.title}</div>`;
+                if (data.title) html += `<div class="lookup-translation">${data.title}</div>`;
                 if (data.extract) html += `<div class="lookup-explanation">${data.extract.length > 200 ? data.extract.substring(0, 200) + '...' : data.extract}</div>`;
-                if (data.url)     html += `<div style="margin-top:4px"><a href="${data.url}" target="_blank" style="font-size:0.7rem;color:var(--primary);text-decoration:none">Wikipedia &rarr;</a></div>`;
+                if (data.url) html += `<div style="margin-top:4px"><a href="${data.url}" target="_blank" style="font-size:0.7rem;color:var(--primary);text-decoration:none">Wikipedia &rarr;</a></div>`;
                 if (!data.title && !data.extract) html = '<div class="lookup-explanation" style="opacity:0.5">未找到百科条目</div>';
-                contentEl.innerHTML = html;
-                this._showLookup();
-            } catch (e) {
-                contentEl.innerHTML = '<div class="lookup-loading">查询失败</div>';
-            }
+                el.innerHTML = html; this._showLookup();
+            } catch (e) { el.innerHTML = '<div class="lookup-loading">查询失败</div>'; }
         },
-
         _showLookup() {
             const popup = document.getElementById('lookup-popup');
             const rect = this._selRect;
             if (!rect) return;
-
-            popup.style.visibility = 'hidden';
-            popup.classList.add('visible');
-            const pw = popup.offsetWidth;
-            const ph = popup.offsetHeight;
+            popup.style.visibility = 'hidden'; popup.classList.add('visible');
+            const pw = popup.offsetWidth, ph = popup.offsetHeight;
             popup.style.visibility = '';
-
-            let top = rect.bottom + 10;
-            let left = rect.left + (rect.width / 2) - (pw / 2);
-
+            let top = rect.bottom + 10, left = rect.left + (rect.width / 2) - (pw / 2);
             if (top + ph > window.innerHeight - 20) top = rect.top - ph - 10;
-
-            const toolbar = document.getElementById('selection-toolbar');
-            if (toolbar.classList.contains('visible')) {
-                const tb = toolbar.getBoundingClientRect();
-                if (top < tb.bottom && top + ph > tb.top) {
-                    top = (top >= rect.bottom) ? rect.top - ph - 10 : rect.bottom + 10;
-                }
-            }
-
             left = Math.max(12, Math.min(left, window.innerWidth - pw - 12));
             top = Math.max(10, top);
-
-            popup.style.top = top + 'px';
-            popup.style.left = left + 'px';
+            popup.style.top = top + 'px'; popup.style.left = left + 'px';
             popup.classList.add('visible');
-        },
+        }
     };
     window.Sel = Sel;
 
-    // --- AI Chat ---
-    let _aiContext = '';
-    let _aiStreaming = false;
-
-    function _addContextBubble(text) {
-        const history = document.getElementById('ai-chat-history');
-        const empty = document.getElementById('ai-empty-state');
-        if (empty) empty.style.display = 'none';
-        const div = document.createElement('div');
-        div.className = 'chat-bubble context';
-        div.textContent = text.length > 200 ? text.substring(0, 200) + '...' : text;
-        history.appendChild(div);
-        const content = document.getElementById('ai-content');
-        content.scrollTop = content.scrollHeight;
-    }
-
-    async function sendChat() {
-        const input = document.getElementById('ai-input');
-        const question = input.value.trim();
-        if (!question || _aiStreaming) return;
-
-        const history = document.getElementById('ai-chat-history');
-        const empty = document.getElementById('ai-empty-state');
-        if (empty) empty.style.display = 'none';
-
-        // User bubble
-        const userDiv = document.createElement('div');
-        userDiv.className = 'chat-bubble user';
-        userDiv.textContent = question;
-        history.appendChild(userDiv);
-
-        input.value = '';
-        input.style.height = 'auto';
-
-        // AI bubble (streaming)
-        const aiDiv = document.createElement('div');
-        aiDiv.className = 'chat-bubble ai';
-        aiDiv.textContent = '';
-        history.appendChild(aiDiv);
-        const content = document.getElementById('ai-content');
-        content.scrollTop = content.scrollHeight;
-
-        _aiStreaming = true;
-
-        try {
-            const resp = await fetch('/api/ai/chat-context', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question, context: _aiContext, title: BOOK_TITLE }),
-            });
-
-            const reader = resp.body.getReader();
-            const decoder = new TextDecoder();
-            let fullText = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                fullText += chunk;
-                aiDiv.textContent = fullText.replace(/\n<!--model:.*?-->$/s, '');
-                content.scrollTop = content.scrollHeight;
+    /* ========== Search Module ========== */
+    const Search = {
+        _results: [], _timer: null, _activeIdx: -1, _query: '',
+        debounce() {
+            clearTimeout(this._timer);
+            this._timer = setTimeout(() => this.run(), 400);
+        },
+        async run() {
+            const query = document.getElementById('search-input').value.trim();
+            this._query = query;
+            if (!query) { this._results = []; this._clearHighlights(); this._render(); return; }
+            document.getElementById('search-status').textContent = t('Searching...');
+            try {
+                const resp = await fetch(`/api/pdf-search/${encodeURIComponent(BOOK_ID)}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const data = await resp.json();
+                this._results = data.results || [];
+                this._render();
+                // Highlight on rendered pages
+                this._clearHighlights();
+                pageContainers.forEach((_, i) => { if (pageRendered[i]) this.renderPageHighlights(i + 1); });
+            } catch (e) {
+                document.getElementById('search-status').textContent = 'Search failed';
             }
-        } catch (e) {
-            aiDiv.textContent = `错误: ${e.message}`;
+        },
+        _render() {
+            const status = document.getElementById('search-status');
+            const container = document.getElementById('search-results');
+            if (!this._results.length) {
+                status.textContent = this._query ? t('No results found') : '';
+                container.innerHTML = ''; return;
+            }
+            status.textContent = `${this._results.length} ${t('results found')}`;
+            container.innerHTML = this._results.map((r, idx) => {
+                const snippet = r.snippet.replace(new RegExp(`(${this._query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark>$1</mark>');
+                return `<div class="sp-item" onclick="Search.goTo(${idx})"><span class="sp-page">${t('Page')} ${r.page}</span><div class="sp-snippet">${snippet}</div></div>`;
+            }).join('');
+        },
+        goTo(idx) {
+            const r = this._results[idx];
+            if (r) TOC.goTo(r.page);
+        },
+        renderPageHighlights(pageNum) {
+            if (!this._query || !this._results.length) return;
+            const container = pageContainers[pageNum - 1];
+            if (!container) return;
+            // Remove old search highlights
+            container.querySelectorAll('.pdf-search-hl').forEach(el => el.remove());
+            const matches = this._results.filter(r => r.page === pageNum);
+            const cw = container.offsetWidth, ch = container.offsetHeight;
+            // We use the rect from backend (in PDF points)
+            matches.forEach(m => {
+                if (!m.rect) return;
+                // Approximate: use page viewport to convert
+                const page0 = pdfDoc?.getPage ? null : null; // can't await here, use ratio
+                const div = document.createElement('div');
+                div.className = 'pdf-search-hl';
+                // rect is [x0, y0, x1, y1] in PDF coordinates
+                // We need the viewport scale - estimate from container
+                const canvas = container.querySelector('canvas');
+                if (!canvas) return;
+                const scaleFactor = parseFloat(container.style.getPropertyValue('--scale-factor')) || 1;
+                div.style.left = (m.rect[0] * scaleFactor) + 'px';
+                div.style.top = (m.rect[1] * scaleFactor) + 'px';
+                div.style.width = ((m.rect[2] - m.rect[0]) * scaleFactor) + 'px';
+                div.style.height = ((m.rect[3] - m.rect[1]) * scaleFactor) + 'px';
+                container.appendChild(div);
+            });
+        },
+        _clearHighlights() {
+            document.querySelectorAll('.pdf-search-hl').forEach(el => el.remove());
         }
+    };
+    window.Search = Search;
 
-        _aiContext = '';
-        _aiStreaming = false;
+    /* ========== Page Jump ========== */
+    const PageJump = {
+        _active: false,
+        activate() {
+            if (this._active) return;
+            this._active = true;
+            const pi = document.getElementById('page-indicator');
+            const oldText = pi.textContent;
+            pi.innerHTML = `<input type="number" min="1" max="${TOTAL_PAGES}" value="${currentPage}" id="page-jump-input" onkeydown="if(event.key==='Enter'){PageJump.go();event.preventDefault()}" onblur="PageJump.cancel()">`;
+            const input = document.getElementById('page-jump-input');
+            input.focus(); input.select();
+        },
+        go() {
+            const input = document.getElementById('page-jump-input');
+            if (!input) return;
+            const page = parseInt(input.value);
+            this._active = false;
+            if (page >= 1 && page <= TOTAL_PAGES) TOC.goTo(page);
+            updatePageIndicator();
+        },
+        cancel() {
+            this._active = false;
+            updatePageIndicator();
+        }
+    };
+    window.PageJump = PageJump;
+
+    /* ========== ChatStore (IndexedDB) ========== */
+    const ChatStore = {
+        _db: null,
+        init() {
+            return new Promise(resolve => {
+                const req = indexedDB.open('reader3_chat', 1);
+                req.onupgradeneeded = e => { e.target.result.createObjectStore('messages', { keyPath: 'bookId' }); };
+                req.onsuccess = e => { ChatStore._db = e.target.result; resolve(); };
+                req.onerror = () => resolve();
+            });
+        },
+        save(bookId, data) {
+            if (!this._db) return;
+            try { const tx = this._db.transaction('messages', 'readwrite'); tx.objectStore('messages').put({ bookId, messages: data, updated: Date.now() }); } catch(e) {}
+        },
+        load(bookId) {
+            if (!this._db) return Promise.resolve(null);
+            return new Promise(resolve => {
+                try {
+                    const tx = this._db.transaction('messages', 'readonly');
+                    const req = tx.objectStore('messages').get(bookId);
+                    req.onsuccess = () => resolve(req.result?.messages || null);
+                    req.onerror = () => resolve(null);
+                } catch(e) { resolve(null); }
+            });
+        },
+        remove(bookId) { if (!this._db) return; try { this._db.transaction('messages', 'readwrite').objectStore('messages').delete(bookId); } catch(e) {} }
+    };
+
+    /* ========== AI Module ========== */
+    const AI = {
+        _streaming: false,
+        _sessions: [],
+        _activeId: 0,
+        _messages: [],
+        _sessionId: 0,
+        _msgId: 0,
+        _context: '',
+
+        _currentSession() { return this._sessions.find(s => s.id === this._activeId); },
+        _ensureSession() {
+            if (!this._activeId || !this._currentSession()) {
+                const session = { id: ++this._sessionId, title: '', messages: [], created: Date.now() };
+                this._sessions.push(session);
+                this._activeId = session.id;
+                this._messages = session.messages;
+            }
+        },
+        _persist() {
+            ChatStore.save(`pdf_${BOOK_ID}`, { sessions: this._sessions, activeId: this._activeId });
+        },
+        _addContext(text) {
+            this._context = text;
+            const history = document.getElementById('ai-chat-history');
+            document.getElementById('ai-empty-state').style.display = 'none';
+            const div = document.createElement('div');
+            div.className = 'chat-bubble context';
+            div.textContent = text.length > 200 ? text.substring(0, 200) + '...' : text;
+            history.appendChild(div);
+            document.getElementById('ai-content').scrollTop = document.getElementById('ai-content').scrollHeight;
+        },
+        _addDelBtn(bubble, msgId) {
+            const bar = document.createElement('div');
+            bar.className = 'msg-bar';
+            const delBtn = document.createElement('button');
+            delBtn.title = t('Delete');
+            delBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>';
+            delBtn.onclick = () => this.deleteMessage(msgId);
+            bar.appendChild(delBtn);
+            bubble.appendChild(bar);
+            bubble.dataset.msgId = msgId;
+        },
+        _saveMsg(role, html) {
+            this._ensureSession();
+            const msg = { id: ++this._msgId, role, html, ts: Date.now() };
+            this._messages.push(msg);
+            const session = this._currentSession();
+            if (session && !session.title && role === 'user') {
+                const text = html.replace(/<[^>]*>/g, '');
+                session.title = text.length > 25 ? text.substring(0, 25) + '...' : text;
+            }
+            this._persist();
+            return msg;
+        },
+        async send() {
+            const input = document.getElementById('ai-input');
+            const question = input.value.trim();
+            if (!question || this._streaming) return;
+
+            const history = document.getElementById('ai-chat-history');
+            document.getElementById('ai-empty-state').style.display = 'none';
+
+            // User bubble
+            const userMsg = this._saveMsg('user', question);
+            const userDiv = document.createElement('div');
+            userDiv.className = 'chat-bubble user';
+            userDiv.textContent = question;
+            this._addDelBtn(userDiv, userMsg.id);
+            history.appendChild(userDiv);
+
+            input.value = ''; input.style.height = 'auto';
+
+            // AI bubble (streaming)
+            const aiDiv = document.createElement('div');
+            aiDiv.className = 'chat-bubble ai';
+            aiDiv.innerHTML = '<span style="opacity:0.5">...</span>';
+            history.appendChild(aiDiv);
+            const content = document.getElementById('ai-content');
+            content.scrollTop = content.scrollHeight;
+
+            this._streaming = true;
+            let fullText = '';
+            try {
+                const resp = await fetch('/api/ai/chat-context', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question, context: this._context, title: BOOK_TITLE })
+                });
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    fullText += decoder.decode(value, { stream: true });
+                    const cleaned = fullText.replace(/\n<!--model:.*?-->$/s, '');
+                    aiDiv.innerHTML = _md(cleaned);
+                    content.scrollTop = content.scrollHeight;
+                }
+            } catch (e) {
+                fullText = `错误: ${e.message}`;
+                aiDiv.innerHTML = fullText;
+            }
+
+            const cleanedFinal = fullText.replace(/\n<!--model:.*?-->$/s, '');
+            const aiMsg = this._saveMsg('ai', _md(cleanedFinal));
+            this._addDelBtn(aiDiv, aiMsg.id);
+
+            this._context = '';
+            this._streaming = false;
+        },
+        deleteMessage(msgId) {
+            const idx = this._messages.findIndex(m => m.id === msgId);
+            if (idx !== -1) this._messages.splice(idx, 1);
+            this._persist();
+            const el = document.querySelector(`[data-msg-id="${msgId}"]`);
+            if (el) { el.style.transition = 'opacity 0.3s, transform 0.3s'; el.style.opacity = '0'; el.style.transform = 'translateX(20px)'; setTimeout(() => el.remove(), 300); }
+            const session = this._currentSession();
+            if (session && session.messages.length === 0) {
+                this._sessions = this._sessions.filter(s => s.id !== session.id);
+                this._activeId = 0; this._messages = [];
+                this._persist();
+                setTimeout(() => { document.getElementById('ai-empty-state').style.display = ''; }, 350);
+            }
+        },
+        clearChat() {
+            if (!confirm(t('Clear all chat history?'))) return;
+            const session = this._currentSession();
+            if (session) {
+                this._sessions = this._sessions.filter(s => s.id !== session.id);
+                this._activeId = 0; this._messages = [];
+            }
+            document.getElementById('ai-chat-history').innerHTML = '';
+            document.getElementById('ai-empty-state').style.display = '';
+            this._persist();
+            this._closeSessionList();
+        },
+        newSession() {
+            const current = this._currentSession();
+            if (!current || current.messages.length === 0) return;
+            this._closeSessionList();
+            this._activeId = 0; this._messages = [];
+            this._persist();
+            document.getElementById('ai-chat-history').innerHTML = '';
+            document.getElementById('ai-empty-state').style.display = '';
+        },
+        switchSession(id) {
+            const session = this._sessions.find(s => s.id === id);
+            if (!session) return;
+            this._activeId = id; this._messages = session.messages;
+            document.getElementById('ai-empty-state').style.display = 'none';
+            this._closeSessionList();
+            this._renderMessages(session.messages);
+            this._persist();
+        },
+        deleteSession(id) {
+            if (!confirm(t('Delete this session?'))) return;
+            this._sessions = this._sessions.filter(s => s.id !== id);
+            if (this._activeId === id) {
+                if (this._sessions.length > 0) {
+                    const latest = this._sessions[this._sessions.length - 1];
+                    this._activeId = latest.id; this._messages = latest.messages;
+                    document.getElementById('ai-empty-state').style.display = 'none';
+                    this._renderMessages(latest.messages);
+                } else {
+                    this._activeId = 0; this._messages = [];
+                    document.getElementById('ai-chat-history').innerHTML = '';
+                    document.getElementById('ai-empty-state').style.display = '';
+                }
+            }
+            this._persist();
+            const list = document.getElementById('session-list');
+            if (list) { list.remove(); this.showSessionList(); }
+        },
+        showSessionList() {
+            const existing = document.getElementById('session-list');
+            if (existing) { this._closeSessionList(); return; }
+            const list = document.createElement('div');
+            list.id = 'session-list'; list.className = 'session-list';
+            if (this._sessions.length === 0) {
+                list.innerHTML = `<div class="session-empty">${t('No chat history')}</div>`;
+            } else {
+                [...this._sessions].sort((a, b) => b.created - a.created).forEach(s => {
+                    const isActive = s.id === this._activeId;
+                    const d = new Date(s.created);
+                    const dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+                    const item = document.createElement('div');
+                    item.className = `session-item${isActive ? ' active' : ''}`;
+                    item.onclick = () => AI.switchSession(s.id);
+                    item.innerHTML = `<div class="session-title">${s.title || t('New Chat')}</div><div class="session-meta"><span>${dateStr}</span><span>${s.messages.length} ${t('messages')}</span></div><button class="session-del" onclick="event.stopPropagation();AI.deleteSession(${s.id})">×</button>`;
+                    list.appendChild(item);
+                });
+            }
+            const panel = document.getElementById('ai-panel');
+            const content = document.getElementById('ai-content');
+            panel.insertBefore(list, content);
+        },
+        _closeSessionList() { document.getElementById('session-list')?.remove(); },
+        _renderMessages(messages) {
+            const history = document.getElementById('ai-chat-history');
+            history.innerHTML = '';
+            messages.forEach(msg => {
+                const bubble = document.createElement('div');
+                bubble.className = `chat-bubble ${msg.role}`;
+                bubble.innerHTML = msg.html;
+                this._addDelBtn(bubble, msg.id);
+                history.appendChild(bubble);
+            });
+            document.getElementById('ai-content').scrollTop = document.getElementById('ai-content').scrollHeight;
+        },
+        async _restoreChat() {
+            await ChatStore.init();
+            const data = await ChatStore.load(`pdf_${BOOK_ID}`);
+            if (!data) return;
+            if (data.sessions) {
+                this._sessions = data.sessions;
+                this._activeId = data.activeId || 0;
+                const allMsgIds = data.sessions.flatMap(s => s.messages.map(m => m.id));
+                this._msgId = allMsgIds.length ? Math.max(...allMsgIds) : 0;
+                this._sessionId = data.sessions.length ? Math.max(...data.sessions.map(s => s.id)) : 0;
+                const active = this._currentSession();
+                if (active) {
+                    this._messages = active.messages;
+                    this._renderMessages(active.messages);
+                    document.getElementById('ai-empty-state').style.display = 'none';
+                }
+            }
+        },
+        quick(action) {
+            const panel = document.getElementById('panels-container');
+            if (panel.classList.contains('collapsed')) toggleRight();
+            const prompts = {
+                summarize: '请总结这本PDF的内容要点',
+                concepts: '请详细解释这本书中的核心知识概念',
+                difficult: '请解释当前阅读内容中的难点',
+                reading: '基于本书内容，推荐一些拓展阅读',
+                characters: '请梳理这本书中出现的主要人物',
+                insight: '请对本书内容做一些深度洞察和分析',
+                writing: '请分析本书的写作手法和文学特点',
+            };
+            document.getElementById('ai-input').value = prompts[action] || '';
+            document.getElementById('ai-input').focus();
+        }
+    };
+    window.AI = AI;
+
+    /* ========== TTS Module ========== */
+    const TTS = {
+        player: new Audio(),
+        rate: '+0%',
+        voice: 'zh-CN-XiaoxiaoNeural',
+        _speeds: [['-30%','0.7×'],['-15%','0.85×'],['+0%','1×'],['+15%','1.15×'],['+30%','1.3×'],['+50%','1.5×'],['+100%','2×']],
+        _voices: [
+            { group: 'Mandarin', items: [['zh-CN-XiaoxiaoNeural','Xiaoxiao · F'],['zh-CN-YunxiNeural','Yunxi · M'],['zh-CN-YunyangNeural','Yunyang · M']] },
+            { group: 'English · US', items: [['en-US-AvaNeural','Ava · F'],['en-US-AndrewNeural','Andrew · M']] },
+            { group: 'English · UK', items: [['en-GB-SoniaNeural','Sonia · F'],['en-GB-RyanNeural','Ryan · M']] }
+        ],
+        _leaveTimer: null,
+
+        _buildSrc(text) {
+            const voice = this._autoVoice(text);
+            return `/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&rate=${encodeURIComponent(this.rate)}`;
+        },
+        _autoVoice(text) {
+            const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+            const isCJK = cjk > text.length * 0.15;
+            const userIsCJK = this.voice.startsWith('zh-');
+            if (isCJK && userIsCJK) return this.voice;
+            if (!isCJK && !userIsCJK) return this.voice;
+            return isCJK ? 'zh-CN-XiaoxiaoNeural' : 'en-US-AvaNeural';
+        },
+        speakSelection() {
+            const text = Sel._selText;
+            if (!text) return;
+            this.player.src = this._buildSrc(text.substring(0, 1000));
+            this.player.play().catch(() => {});
+            document.getElementById('audio-console').classList.add('visible');
+            this._updatePlayBtn(true);
+        },
+        toggleAll() {
+            if (!this.player.paused) { this.player.pause(); this._updatePlayBtn(false); }
+            else if (this.player.src) { this.player.play().catch(() => {}); this._updatePlayBtn(true); }
+        },
+        stop() {
+            this.player.pause(); this.player.currentTime = 0;
+            document.getElementById('audio-console').classList.remove('visible');
+            this._updatePlayBtn(false);
+        },
+        _updatePlayBtn(playing) {
+            const btn = document.getElementById('play-main-btn');
+            if (playing) btn.innerHTML = '<svg viewBox="0 0 24 24" fill="white" stroke="white"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+            else btn.innerHTML = '<svg viewBox="0 0 24 24" fill="white" stroke="white"><polygon points="7 3 21 12 7 21 7 3"/></svg>';
+        },
+        setRate(rate) {
+            this.rate = rate;
+            const idx = this._speeds.findIndex(([r]) => r === rate);
+            if (idx >= 0) this._updateSlider(idx);
+            if (!this.player.paused && this.player.src) {
+                const src = this.player.src.replace(/rate=[^&]*/, `rate=${encodeURIComponent(rate)}`);
+                this.player.src = src; this.player.play().catch(() => {});
+            }
+        },
+        showVoiceMenu(btn) {
+            const popup = document.getElementById('voice-popup');
+            if (popup.classList.contains('visible')) { this._hidePopups(); return; }
+            this._hidePopups();
+            const list = document.getElementById('voice-popup-list');
+            let html = '<div class="ap-slider" id="voice-slider"></div>';
+            this._voices.forEach(g => {
+                html += `<div class="ap-group">${t(g.group)}</div>`;
+                g.items.forEach(([id, name]) => {
+                    const active = this.voice === id ? ' active' : '';
+                    html += `<div class="ap-item${active}" data-voice="${id}" onclick="TTS._selectVoice(this,'${id}')"><span>${t(name)}</span><span class="ap-check">✓</span></div>`;
+                });
+            });
+            list.innerHTML = html;
+            this._showPopup(popup, btn);
+            const activeItem = list.querySelector('.ap-item.active');
+            if (activeItem) {
+                activeItem.scrollIntoView({ block: 'center' });
+                const slider = document.getElementById('voice-slider');
+                slider.style.transition = 'none';
+                slider.style.height = (activeItem.offsetHeight - 6) + 'px';
+                slider.style.transform = `translateY(${activeItem.offsetTop + 3}px)`;
+                requestAnimationFrame(() => slider.style.transition = '');
+            }
+        },
+        _selectVoice(el, voiceId) {
+            const list = document.getElementById('voice-popup-list');
+            const slider = document.getElementById('voice-slider');
+            list.querySelectorAll('.ap-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+            slider.style.height = (el.offsetHeight - 6) + 'px';
+            slider.style.transform = `translateY(${el.offsetTop + 3}px)`;
+            this.voice = voiceId;
+        },
+        showSpeedMenu(btn) {
+            const popup = document.getElementById('speed-popup');
+            if (popup.classList.contains('visible')) { this._hidePopups(); return; }
+            this._hidePopups();
+            const wrap = document.getElementById('speed-slider-wrap');
+            const idx = this._speeds.findIndex(([r]) => r === this.rate);
+            const pct = (idx / (this._speeds.length - 1)) * 100;
+            let labels = '';
+            this._speeds.forEach(([rate, label]) => {
+                const active = this.rate === rate ? ' active' : '';
+                labels += `<span class="speed-label-dot${active}" onclick="TTS.setRate('${rate}')">${label}</span>`;
+            });
+            wrap.innerHTML = `<div class="speed-track" id="speed-track"><div class="speed-fill" id="speed-fill" style="width:${pct}%"></div><div class="speed-thumb" id="speed-thumb" style="left:${pct}%"></div></div><div class="speed-labels">${labels}</div>`;
+            this._showPopup(popup, btn);
+            const thumb = document.getElementById('speed-thumb');
+            const track = document.getElementById('speed-track');
+            const snapTo = (cx) => {
+                const rect = track.getBoundingClientRect();
+                const ratio = Math.max(0, Math.min(1, (cx - rect.left) / rect.width));
+                const nearest = Math.round(ratio * (this._speeds.length - 1));
+                this.setRate(this._speeds[nearest][0]);
+            };
+            thumb.style.cursor = 'grab';
+            thumb.onmousedown = (e) => {
+                e.preventDefault(); thumb.classList.add('dragging');
+                const onMove = (ev) => snapTo(ev.clientX);
+                const onUp = () => { thumb.classList.remove('dragging'); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+            };
+            track.style.cursor = 'pointer';
+            track.onclick = (e) => snapTo(e.clientX);
+        },
+        _updateSlider(idx) {
+            const pct = (idx / (this._speeds.length - 1)) * 100;
+            const fill = document.getElementById('speed-fill'), thumb = document.getElementById('speed-thumb');
+            if (fill) fill.style.width = pct + '%';
+            if (thumb) thumb.style.left = pct + '%';
+            document.querySelectorAll('.speed-label-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+        },
+        _showPopup(popup, anchor) {
+            const rect = anchor.getBoundingClientRect();
+            popup.style.visibility = 'hidden'; popup.classList.add('visible');
+            const pw = popup.offsetWidth, ph = popup.offsetHeight;
+            popup.style.visibility = '';
+            let left = rect.left + rect.width / 2 - pw / 2, top = rect.top - ph - 8;
+            if (top < 8) top = rect.bottom + 8;
+            left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+            popup.style.left = left + 'px'; popup.style.top = top + 'px';
+            setTimeout(() => document.addEventListener('mousedown', this._outsideHandler), 0);
+            clearTimeout(this._leaveTimer);
+            popup.onmouseleave = () => { this._leaveTimer = setTimeout(() => this._hidePopups(), 900); };
+            popup.onmouseenter = () => clearTimeout(this._leaveTimer);
+        },
+        _hidePopups() {
+            clearTimeout(this._leaveTimer);
+            document.getElementById('voice-popup').classList.remove('visible');
+            document.getElementById('speed-popup').classList.remove('visible');
+            document.removeEventListener('mousedown', this._outsideHandler);
+        },
+        _outsideHandler(e) { if (!e.target.closest('.audio-popup') && !e.target.closest('.player-label')) TTS._hidePopups(); }
+    };
+    window.TTS = TTS;
+    TTS.player.onended = () => TTS._updatePlayBtn(false);
+
+    /* ========== Toggle Controls ========== */
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile) {
+            sidebar.classList.toggle('mobile-open');
+            document.getElementById('mobile-overlay').classList.toggle('visible', sidebar.classList.contains('mobile-open'));
+        } else {
+            sidebar.classList.toggle('collapsed');
+        }
     }
-    window.sendChat = sendChat;
+    window.toggleSidebar = toggleSidebar;
 
-    function clearChat() {
-        const history = document.getElementById('ai-chat-history');
-        history.innerHTML = '';
-        const empty = document.getElementById('ai-empty-state');
-        if (empty) empty.style.display = '';
-        _aiContext = '';
-    }
-    window.clearChat = clearChat;
-
-    function quickAction(action) {
-        const panel = document.getElementById('panels-container');
-        if (panel.classList.contains('collapsed')) toggleRight();
-
-        const prompts = {
-            summarize: '请总结这本PDF的内容要点',
-            explain: '请解释当前阅读内容中的难点',
-            translate: '请翻译我选中的内容',
-        };
-        const input = document.getElementById('ai-input');
-        input.value = prompts[action] || '';
-        input.focus();
-    }
-    window.quickAction = quickAction;
-
-    // Auto-resize textarea
-    document.getElementById('ai-input').addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-    });
-
-    // --- Toggle Controls ---
     function toggleRight() {
         const panel = document.getElementById('panels-container');
         const btn = document.getElementById('toggle-right');
         const isMobile = window.innerWidth <= 768;
-
         if (isMobile) {
             panel.classList.toggle('mobile-open');
             document.getElementById('mobile-overlay').classList.toggle('visible', panel.classList.contains('mobile-open'));
@@ -894,37 +1931,144 @@
     }
     window.toggleRight = toggleRight;
 
-    // Mobile overlay click
+    /* ========== Resizable Sidebars ========== */
+    function setupResizers() {
+        const root = document.documentElement;
+        const setup = (id, variable, side, storageKey) => {
+            const resizer = document.getElementById(id);
+            const panelId = side === 'left' ? 'sidebar' : 'panels-container';
+            const panel = document.getElementById(panelId);
+            const defaultWidth = side === 'left' ? 260 : 340;
+            const snapThreshold = 80;
+            const resistStart = 180;
+            let dragging = false, lastRaw = 0, lastGoodWidth = null, rafId = 0;
+
+            const applyWidth = () => {
+                rafId = 0;
+                if (lastRaw < resistStart) {
+                    const t = lastRaw / resistStart;
+                    const display = resistStart * Math.pow(t, 0.6);
+                    root.style.setProperty(variable, display + 'px');
+                    resizer.classList.toggle('snap-zone', lastRaw < snapThreshold);
+                } else if (lastRaw <= 600) {
+                    root.style.setProperty(variable, lastRaw + 'px');
+                    localStorage.setItem(storageKey, lastRaw + 'px');
+                    lastGoodWidth = lastRaw;
+                    resizer.classList.remove('snap-zone');
+                }
+            };
+
+            const onMove = (e) => {
+                if (!dragging) return;
+                lastRaw = side === 'left' ? e.clientX : window.innerWidth - e.clientX;
+                lastRaw = Math.max(0, lastRaw);
+                if (!rafId) rafId = requestAnimationFrame(applyWidth);
+            };
+
+            const onEnd = () => {
+                dragging = false;
+                document.body.classList.remove('is-dragging');
+                resizer.classList.remove('snap-zone');
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onEnd);
+
+                if (lastRaw < snapThreshold) {
+                    root.style.setProperty(variable, (lastGoodWidth || defaultWidth) + 'px');
+                    panel.classList.add('collapsed');
+                    if (side === 'right') document.getElementById('toggle-right').classList.add('rotated');
+                } else if (lastRaw < resistStart) {
+                    root.style.setProperty(variable, resistStart + 'px');
+                    localStorage.setItem(storageKey, resistStart + 'px');
+                }
+            };
+
+            resizer.onmousedown = (e) => {
+                if (panel.classList.contains('collapsed')) {
+                    panel.style.transition = 'none';
+                    panel.classList.remove('collapsed');
+                    root.style.setProperty(variable, '0px');
+                    panel.offsetHeight;
+                    panel.style.transition = '';
+                    if (side === 'right') document.getElementById('toggle-right').classList.remove('rotated');
+                }
+                lastGoodWidth = parseFloat(localStorage.getItem(storageKey)) || defaultWidth;
+                lastRaw = 0;
+                dragging = true;
+                document.body.classList.add('is-dragging');
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onEnd);
+                e.preventDefault();
+            };
+        };
+        setup('left-resizer', '--sidebar-width', 'left', 'pdf_sidebar_width');
+        setup('right-resizer', '--panels-width', 'right', 'pdf_panels_width');
+    }
+    if (window.innerWidth > 768) setupResizers();
+
+    let _activePanel = null;
+    function togglePanel(name) {
+        const panels = { settings: 'settings-panel', search: 'search-panel', notebook: 'notebook-panel' };
+        const panelId = panels[name];
+        if (!panelId) return;
+        if (_activePanel === name) {
+            document.getElementById(panelId).style.display = 'none';
+            _activePanel = null;
+        } else {
+            Object.values(panels).forEach(id => document.getElementById(id).style.display = 'none');
+            document.getElementById(panelId).style.display = 'block';
+            _activePanel = name;
+            if (name === 'notebook') { Notebook.renderHighlights(); Notebook.renderBookmarks(); }
+            if (name === 'search') document.getElementById('search-input').focus();
+        }
+    }
+    window.togglePanel = togglePanel;
+
+    // Close panels on outside click
+    document.addEventListener('mousedown', (e) => {
+        if (_activePanel) {
+            const panels = { settings: 'settings-panel', search: 'search-panel', notebook: 'notebook-panel' };
+            const panelEl = document.getElementById(panels[_activePanel]);
+            const toggleGroup = document.querySelector('.toggle-group');
+            if (panelEl && !panelEl.contains(e.target) && !toggleGroup.contains(e.target)) {
+                panelEl.style.display = 'none';
+                _activePanel = null;
+            }
+        }
+    });
+
+    // Mobile overlay
     document.getElementById('mobile-overlay').addEventListener('click', () => {
+        document.getElementById('sidebar').classList.remove('mobile-open');
         document.getElementById('panels-container').classList.remove('mobile-open');
         document.getElementById('mobile-overlay').classList.remove('visible');
     });
 
-    // --- Theme System ---
-    const THEMES = [
-        { name: '', cls: 'dot-lavender', label: 'Lavender' },
-        { name: 'ocean', cls: 'dot-ocean', label: 'Ocean' },
-        { name: 'forest', cls: 'dot-forest', label: 'Forest' },
-        { name: 'sepia', cls: 'dot-sepia', label: 'Sepia' },
-        { name: 'slate', cls: 'dot-slate', label: 'Slate' },
-        { name: 'dark', cls: 'dot-dark', label: 'Dark' },
-    ];
+    // Auto-resize textarea
+    document.getElementById('ai-input').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
 
+    /* ========== Theme System ========== */
     function initThemes() {
         const grid = document.getElementById('theme-grid');
         const saved = localStorage.getItem('reader_theme') || '';
         if (saved) document.documentElement.setAttribute('data-theme', saved);
-
-        THEMES.forEach(t => {
+        const themes = [
+            { name: '', cls: 'dot-lavender', label: 'Lavender' },
+            { name: 'ocean', cls: 'dot-ocean', label: 'Ocean' },
+            { name: 'forest', cls: 'dot-forest', label: 'Forest' },
+            { name: 'sepia', cls: 'dot-sepia', label: 'Sepia' },
+            { name: 'slate', cls: 'dot-slate', label: 'Slate' },
+            { name: 'dark', cls: 'dot-dark', label: 'Dark' },
+        ];
+        themes.forEach(t => {
             const dot = document.createElement('button');
             dot.className = `theme-dot ${t.cls}${t.name === saved ? ' active' : ''}`;
             dot.title = t.label;
             dot.onclick = () => {
-                if (t.name) {
-                    document.documentElement.setAttribute('data-theme', t.name);
-                } else {
-                    document.documentElement.removeAttribute('data-theme');
-                }
+                if (t.name) document.documentElement.setAttribute('data-theme', t.name);
+                else document.documentElement.removeAttribute('data-theme');
                 localStorage.setItem('reader_theme', t.name);
                 grid.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
                 dot.classList.add('active');
@@ -933,34 +2077,55 @@
         });
     }
 
-    // Settings panel toggle
-    let _settingsOpen = false;
-    function toggleSettings() {
-        const panel = document.getElementById('settings-panel');
-        _settingsOpen = !_settingsOpen;
-        panel.style.display = _settingsOpen ? 'block' : 'none';
-    }
-    window.toggleSettings = toggleSettings;
+    /* ========== Keyboard Shortcuts ========== */
+    document.addEventListener('keydown', (e) => {
+        // Skip if typing in input/textarea
+        if (e.target.matches('input, textarea, [contenteditable]')) return;
 
-    // Close settings on outside click
-    document.addEventListener('mousedown', (e) => {
-        const panel = document.getElementById('settings-panel');
-        const btn = document.getElementById('toggle-settings');
-        if (_settingsOpen && !panel.contains(e.target) && !btn.contains(e.target)) {
-            _settingsOpen = false;
-            panel.style.display = 'none';
+        switch(e.key) {
+            case '+': case '=': e.preventDefault(); Zoom.adjust(10); break;
+            case '-': e.preventDefault(); Zoom.adjust(-10); break;
+            case '0': e.preventDefault(); Zoom.fitWidth(); break;
+            case 'ArrowLeft': e.preventDefault(); viewer.scrollBy({ top: -viewer.clientHeight + 80, behavior: 'smooth' }); break;
+            case 'ArrowRight': case ' ': e.preventDefault(); viewer.scrollBy({ top: viewer.clientHeight - 80, behavior: 'smooth' }); break;
+            case 'ArrowUp': e.preventDefault(); viewer.scrollBy({ top: -120, behavior: 'smooth' }); break;
+            case 'ArrowDown': e.preventDefault(); viewer.scrollBy({ top: 120, behavior: 'smooth' }); break;
+            case 'Home': e.preventDefault(); viewer.scrollTo({ top: 0, behavior: 'smooth' }); break;
+            case 'End': e.preventDefault(); viewer.scrollTo({ top: viewer.scrollHeight, behavior: 'smooth' }); break;
+            case 'g': case 'G': e.preventDefault(); PageJump.activate(); break;
+            case '/': case 'f': case 'F':
+                if (!e.ctrlKey && !e.metaKey) { e.preventDefault(); togglePanel('search'); }
+                break;
+            case 'Escape':
+                if (_activePanel) { document.getElementById({ settings: 'settings-panel', search: 'search-panel', notebook: 'notebook-panel' }[_activePanel]).style.display = 'none'; _activePanel = null; }
+                document.getElementById('selection-toolbar').classList.remove('visible');
+                document.getElementById('lookup-popup').classList.remove('visible');
+                break;
         }
     });
 
-    // --- Init ---
+    /* ========== Init ========== */
+    Highlights.load();
+    Bookmarks.load();
     initThemes();
     Sel.init();
+    AI._restoreChat();
     init();
 
-    // Initialize AI panel: collapsed by default on desktop
+    // Desktop: collapse AI panel by default
     if (window.innerWidth > 768) {
-        document.getElementById('panels-container').classList.add('collapsed');
         document.getElementById('toggle-right').classList.add('rotated');
+    }
+    // Desktop: open sidebar if outline exists
+    if (window.innerWidth > 768 && OUTLINE.length > 0) {
+        document.getElementById('sidebar').classList.remove('collapsed');
+    }
+    // Restore saved panel widths
+    if (window.innerWidth > 768) {
+        const savedSidebar = localStorage.getItem('pdf_sidebar_width');
+        const savedPanels = localStorage.getItem('pdf_panels_width');
+        if (savedSidebar) document.documentElement.style.setProperty('--sidebar-width', savedSidebar);
+        if (savedPanels) document.documentElement.style.setProperty('--panels-width', savedPanels);
     }
 </script>
 </body>
