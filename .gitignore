@@ -39,3 +39,18 @@ package/*.epub
 docs/.pdca-snapshots/
 docs/.pdca-status.json
 docs/.bkit-memory.json
+
+# 敏感环境配置文件（截获 .env）
+.env
+.env.*
+
+# 插件及工具生成的本地配置（截获 settings.local.json）
+settings.local.json
+.claude/
+.gemini/
+
+# 日志文件（截获 server.log）
+*.log
+
+# PDCA 状态文件（补全根目录下的路径，截获 .pdca-status.json）
+.pdca-status.json
