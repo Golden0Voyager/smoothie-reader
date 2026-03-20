@@ -18,7 +18,7 @@ import edge_tts
 import httpx
 
 # AI Imports
-import google.generativeai as genai
+from google import genai as google_genai
 from dotenv import load_dotenv
 
 from reader3 import Book, BookMetadata, ChapterContent, TOCEntry, process_epub, save_to_pickle
@@ -203,10 +203,9 @@ async def _call_anthropic(base_url, api_key, model, prompt, temperature, max_tok
 
 async def _call_gemini(api_key, model_name, prompt, temperature, max_tokens):
     """Non-streaming call to Gemini via SDK."""
-    genai.configure(api_key=api_key)
-    m = genai.GenerativeModel(model_name)
-    config = genai.types.GenerationConfig(temperature=temperature, max_output_tokens=max_tokens)
-    response = await asyncio.to_thread(lambda: m.generate_content(prompt, generation_config=config))
+    client = google_genai.Client(api_key=api_key)
+    config = google_genai.types.GenerateContentConfig(temperature=temperature, max_output_tokens=max_tokens)
+    response = await asyncio.to_thread(lambda: client.models.generate_content(model=model_name, contents=prompt, config=config))
     return response.text.strip()
 
 
@@ -323,10 +322,10 @@ async def _ai_stream(prompt, temperature=0.7, max_tokens=4096, task=None):
                 mt = p.get('max_tokens', max_tokens)
                 fmt = p['format']
                 if fmt == 'gemini':
-                    genai.configure(api_key=p['api_key'])
-                    m = genai.GenerativeModel(p['model'])
+                    client = google_genai.Client(api_key=p['api_key'])
+                    config = google_genai.types.GenerateContentConfig(temperature=t)
                     response = await asyncio.to_thread(
-                        lambda: m.generate_content(prompt, stream=True, generation_config=genai.types.GenerationConfig(temperature=t))
+                        lambda: client.models.generate_content_stream(model=p['model'], contents=prompt, config=config)
                     )
                     for chunk in response:
                         try:
@@ -501,6 +500,10 @@ def _process_pdf(pdf_path: str, out_dir: str) -> dict:
         with open(os.path.join(out_dir, "cover_image.txt"), "w") as f:
             f.write("cover.png")
 
+    # 提取 PDF 目录（outline/bookmarks）
+    toc = doc.get_toc()  # PyMuPDF 返回 [[level, title, page], ...]
+    outline = [{"level": item[0], "title": item[1], "page": item[2]} for item in toc]
+
     doc.close()
 
     # Copy PDF to output dir
@@ -514,6 +517,7 @@ def _process_pdf(pdf_path: str, out_dir: str) -> dict:
         "author": author,
         "pages": page_count,
         "format": "pdf",
+        "outline": outline,
     }
     with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta_info, f, ensure_ascii=False)
@@ -1215,12 +1219,21 @@ async def test_provider(req: dict):
         api_key = _ai_config['providers'][pid].get('api_key', '')
     if not api_key:
         return {"ok": False, "message": "No API key provided"}
+    if not model_name:
+        model_name = defn.get('default_model', '')
+
+    if fmt == 'gemini':
+        try:
+            client = google_genai.Client(api_key=api_key)
+            resp = await asyncio.to_thread(lambda: client.models.generate_content(model=model_name, contents="Say 'ok'"))
+            return {"ok": True, "message": f"Connected: {model_name}"}
+        except Exception as e:
+            return {"ok": False, "message": str(e)}
+
     if not base_url:
         base_url = defn.get('base_url', '')
     if not base_url:
         return {"ok": False, "message": "No base URL configured"}
-    if not model_name:
-        model_name = defn.get('default_model', '')
     def _extract_error(resp):
         """Extract human-readable error from API response."""
         try:
@@ -1238,12 +1251,7 @@ async def test_provider(req: dict):
             return resp.text[:200] if hasattr(resp, 'text') else f"HTTP {resp.status_code}"
 
     try:
-        if fmt == 'gemini':
-            genai.configure(api_key=api_key)
-            m = genai.GenerativeModel(model_name)
-            resp = await asyncio.to_thread(m.generate_content, "Say 'ok'")
-            return {"ok": True, "message": f"Connected: {model_name}"}
-        elif fmt == 'anthropic':
+        if fmt == 'anthropic':
             async with httpx.AsyncClient(timeout=15, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
                 resp = await client.post(
                     f"{base_url.rstrip('/')}/messages",
@@ -1306,17 +1314,22 @@ async def fetch_models(req: dict):
         api_key = _ai_config['providers'][pid].get('api_key', '')
     if not api_key:
         return {"models": [], "error": "No API key provided"}
+
+    try:
+        if fmt == 'gemini':
+            client = google_genai.Client(api_key=api_key)
+            models = await asyncio.to_thread(lambda: [m.name.replace('models/', '') for m in client.models.list() if 'generateContent' in (m.supported_actions or [])])
+            return {"models": models}
+    except Exception as e:
+        return {"models": [], "error": str(e)}
+
     if not base_url:
         base_url = defn.get('base_url', '')
     if not base_url:
         return {"models": [], "error": "No base URL configured"}
 
     try:
-        if fmt == 'gemini':
-            genai.configure(api_key=api_key)
-            models = await asyncio.to_thread(lambda: [m.name.replace('models/', '') for m in genai.list_models() if 'generateContent' in (m.supported_generation_methods or [])])
-            return {"models": models}
-        elif fmt == 'anthropic':
+        if fmt == 'anthropic':
             async with httpx.AsyncClient(timeout=15, trust_env=True, headers={"User-Agent": "Reader3/1.0"}) as client:
                 resp = await client.get(f"{base_url.rstrip('/')}/models", headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"})
                 resp.raise_for_status()
@@ -1491,12 +1504,10 @@ async def list_apple_books():
         title_name = _safe_dirname(r['ZTITLE'], [r['ZAUTHOR']] if r['ZAUTHOR'] else None)
         if os.path.exists(os.path.join(BOOKS_DIR, title_name + "_data", "book.pkl")):
             return True
-        # 3. Fuzzy: normalized prefix match or substring containment
+        # 3. Fuzzy: require full normalized equality (prefix match too loose for serials)
         ab_norm = _normalize(r['ZTITLE'])
-        for imp_norm in imported_normalized:
-            if (imp_norm.startswith(ab_norm[:6]) or ab_norm.startswith(imp_norm[:6])
-                    or (len(imp_norm) >= 4 and imp_norm in ab_norm)):
-                return True
+        if ab_norm in imported_normalized:
+            return True
         return False
 
     books = []
@@ -1733,6 +1744,7 @@ async def read_pdf(request: Request, book_id: str):
         "book_id": safe_id,
         "title": display_title or meta.get('title', 'Untitled'),
         "pages": meta.get('pages', 0),
+        "outline_json": json.dumps(meta.get('outline', []), ensure_ascii=False),
     })
 
 
@@ -1744,6 +1756,54 @@ async def serve_pdf_file(book_id: str):
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF file not found")
     return FileResponse(pdf_path, media_type="application/pdf")
+
+
+@app.post("/api/pdf-search/{book_id}")
+async def search_pdf(book_id: str, req: dict):
+    """Search text in PDF file using PyMuPDF."""
+    import fitz
+    safe_id = os.path.basename(book_id)
+    pdf_path = os.path.join(BOOKS_DIR, safe_id, "book.pdf")
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF file not found")
+
+    query = (req.get("query") or "").strip()
+    if not query:
+        return {"results": []}
+
+    results = []
+    doc = fitz.open(pdf_path)
+    try:
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            text_instances = page.search_for(query)
+            if text_instances:
+                # Get page text for snippet extraction
+                page_text = page.get_text("text")
+                for rect in text_instances:
+                    # Extract snippet around match
+                    idx = page_text.lower().find(query.lower())
+                    if idx >= 0:
+                        start = max(0, idx - 40)
+                        end = min(len(page_text), idx + len(query) + 40)
+                        snippet = page_text[start:end].replace('\n', ' ').strip()
+                        if start > 0:
+                            snippet = '...' + snippet
+                        if end < len(page_text):
+                            snippet = snippet + '...'
+                    else:
+                        snippet = query
+                    results.append({
+                        "page": page_num + 1,
+                        "snippet": snippet,
+                        "rect": [rect.x0, rect.y0, rect.x1, rect.y1],
+                    })
+            if len(results) >= 200:
+                break
+    finally:
+        doc.close()
+
+    return {"results": results}
 
 
 @app.post("/api/search-cover/{book_id}")
