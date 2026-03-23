@@ -566,7 +566,22 @@
             'ctx-delete': '删除',
             'btn-import': '导入',
             'menu-upload': '上传文件',
-            'menu-apple-books': 'Apple 图书'
+            'menu-apple-books': 'Apple 图书',
+            'rename-title': '重命名',
+            'rename-placeholder': '输入新书名...',
+            'saving': '保存中...',
+            'searching': '搜索中...',
+            'no-covers': '未找到封面，请尝试其他关键词。',
+            'select-cover': '选择封面',
+            'use-cover': '使用此封面',
+            'more-covers': '更多封面',
+            'skip': '跳过',
+            'ab-title': 'Apple 图书',
+            'ab-subtitle': '选择要导入的书籍',
+            'ab-no-books': '未找到书籍',
+            'selected': '已选择 {n} 本',
+            'done': '完成',
+            'failed': '失败'
         },
         en: {
             'importing': 'Importing...',
@@ -590,7 +605,22 @@
             'ctx-delete': 'Delete',
             'btn-import': 'Import',
             'menu-upload': 'Upload File',
-            'menu-apple-books': 'Apple Books'
+            'menu-apple-books': 'Apple Books',
+            'rename-title': 'Rename',
+            'rename-placeholder': 'New title...',
+            'saving': 'Saving...',
+            'searching': 'Searching...',
+            'no-covers': 'No covers found. Try different keywords.',
+            'select-cover': 'Select Cover',
+            'use-cover': 'Use This Cover',
+            'more-covers': 'More covers',
+            'skip': 'Skip',
+            'ab-title': 'Apple Books',
+            'ab-subtitle': 'Select books to import',
+            'ab-no-books': 'No books found',
+            'selected': '{n} selected',
+            'done': 'Done',
+            'failed': 'Failed'
         }
     };
 
@@ -626,7 +656,11 @@
         // Update static elements with data-t attribute
         document.querySelectorAll('[data-t]').forEach(el => {
             const key = el.getAttribute('data-t');
-            el.textContent = t(key);
+            if (el.tagName === 'INPUT' && el.placeholder) {
+                el.placeholder = t(key);
+            } else {
+                el.textContent = t(key);
+            }
         });
     }
 
@@ -658,6 +692,9 @@
         if (e.key === 'Escape') {
             ctxMenu.classList.remove('active');
             closeRenameModal();
+            closeConfirm();
+            closeCoverModal();
+            closeAppleBooks();
         }
     });
 
@@ -665,6 +702,7 @@
         ctxMenu.classList.remove('active');
         const input = document.getElementById('rename-input');
         input.value = _ctxTitle;
+        input.placeholder = t('rename-placeholder');
         document.getElementById('rename-modal').classList.add('active');
         setTimeout(() => { input.focus(); input.select(); }, 50);
     }
@@ -677,14 +715,14 @@
         const newTitle = document.getElementById('rename-input').value.trim();
         const btn = document.getElementById('rename-confirm-btn');
         if (newTitle === _ctxTitle) { closeRenameModal(); return; }
-        btn.textContent = '保存中...'; btn.disabled = true;
+        btn.textContent = t('saving'); btn.disabled = true;
         fetch(`/api/rename-book/${encodeURIComponent(_ctxBookId)}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: newTitle })
         }).then(r => { if (!r.ok) throw new Error('Failed'); window.location.reload(); })
           .catch(e => {
-            alert('重命名失败：' + e.message);
-            btn.textContent = '确定'; btn.disabled = false;
+            alert(t('import-failed') + '：' + e.message);
+            btn.textContent = t('confirm'); btn.disabled = false;
           });
     }
 
@@ -695,11 +733,11 @@
 
     // --- Generic Confirm ---
     let _confirmCallback = null;
-    function showConfirm(title, message, btnText, btnClass, callback) {
-        document.getElementById('confirm-title').textContent = title;
-        document.getElementById('confirm-message').textContent = message;
+    function showConfirm(titleKey, messageKey, btnTextKey, btnClass, data = {}, callback) {
+        document.getElementById('confirm-title').textContent = t(titleKey);
+        document.getElementById('confirm-message').textContent = t(messageKey, data);
         const btn = document.getElementById('confirm-action-btn');
-        btn.textContent = btnText;
+        btn.textContent = t(btnTextKey);
         btn.className = 'confirm-btn ' + btnClass;
         _confirmCallback = callback;
         document.getElementById('confirm-modal').classList.add('active');
@@ -712,18 +750,18 @@
 
     async function ctxReprocess() {
         ctxMenu.classList.remove('active');
-        showConfirm('重新处理', `确认重新解析《${_ctxTitle}》吗？这通常用于修复目录显示问题。`, '重新处理', 'primary', async () => {
+        showConfirm('reprocess-title', 'reprocess-msg', 'reprocess-btn', 'primary', {title: _ctxTitle}, async () => {
             try {
                 const r = await fetch(`/api/reprocess/${encodeURIComponent(_ctxBookId)}`, { method: 'POST' });
                 if (!r.ok) throw new Error('Failed');
                 window.location.reload();
-            } catch (e) { alert('重新处理失败：' + e.message); }
+            } catch (e) { alert(t('import-failed') + '：' + e.message); }
         });
     }
 
     async function ctxDelete() {
         ctxMenu.classList.remove('active');
-        showConfirm('删除书籍', `确认删除《${_ctxTitle}》吗？此操作不可撤销。`, '删除', 'danger', async () => {
+        showConfirm('delete-title', 'delete-msg', 'delete-btn', 'danger', {title: _ctxTitle}, async () => {
             try {
                 const r = await fetch('/api/delete-books', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -731,7 +769,7 @@
                 });
                 if (!r.ok) throw new Error('Failed');
                 window.location.reload();
-            } catch (e) { alert('删除失败：' + e.message); }
+            } catch (e) { alert(t('import-failed') + '：' + e.message); }
         });
     }
 
@@ -753,8 +791,8 @@
         const confirmBtn = document.getElementById('cover-confirm-btn');
         const searchInput = document.getElementById('cover-search-input');
         confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Use This Cover';
-        content.innerHTML = '<div class="loading">Searching for covers...</div>';
+        confirmBtn.textContent = t('use-cover');
+        content.innerHTML = `<div class="loading">${t('searching')}</div>`;
         modal.classList.add('active');
 
         try {
@@ -766,13 +804,12 @@
             });
             if (!r.ok) throw new Error('Search failed');
             const data = await r.json();
-            // Set search input to current query so user can edit
             if (!customQuery) searchInput.value = data.query;
             if (!data.covers || data.covers.length === 0) {
-                content.innerHTML = '<div class="loading">No covers found. Try different keywords.</div>';
+                content.innerHTML = `<div class="loading">${t('no-covers')}</div>`;
                 return;
             }
-            document.getElementById('cover-modal-title').textContent = `Select cover`;
+            document.getElementById('cover-modal-title').textContent = t('select-cover');
             _allCovers = data.covers;
             _coverPage = 0;
             _renderCoverPage();
@@ -792,7 +829,6 @@
         const slice = _allCovers.slice(start, start + _coversPerPage);
         const hasMore = start + _coversPerPage < _allCovers.length;
         content.innerHTML = '<div class="cover-grid">' + slice.map(c => {
-            // Douban images need server proxy (anti-hotlinking)
             const displayUrl = c.image_url.includes('doubanio.com')
                 ? `/api/proxy-image?url=${encodeURIComponent(c.image_url)}`
                 : c.image_url;
@@ -800,8 +836,7 @@
                 <img src="${displayUrl}" alt="${c.title}" onerror="this.parentElement.style.display='none'">
             </div>`;
         }).join('') + '</div>'
-        + (hasMore ? '<div style="text-align:center;margin-top:8px"><button class="cover-modal-btn cancel" onclick="_coverPage++;_renderCoverPage()" style="font-size:0.82rem">More covers</button></div>' : '');
-        // Reset selection since we're showing new options
+        + (hasMore ? `<div style="text-align:center;margin-top:8px"><button class="cover-modal-btn cancel" onclick="_coverPage++;_renderCoverPage()" style="font-size:0.82rem">${t('more-covers')}</button></div>` : '');
         _selectedCoverUrl = null;
         document.getElementById('cover-confirm-btn').disabled = true;
     }
@@ -816,7 +851,7 @@
     async function confirmCover() {
         if (!_coverBookId || !_selectedCoverUrl) return;
         const btn = document.getElementById('cover-confirm-btn');
-        btn.textContent = 'Saving...'; btn.disabled = true;
+        btn.textContent = t('saving'); btn.disabled = true;
         try {
             const r = await fetch(`/api/set-cover/${encodeURIComponent(_coverBookId)}`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -826,14 +861,13 @@
             window.location.reload();
         } catch (e) {
             alert('Error: ' + e.message);
-            btn.textContent = 'Use This Cover'; btn.disabled = false;
+            btn.textContent = t('use-cover'); btn.disabled = false;
         }
     }
 
     function closeCoverModal() {
         document.getElementById('cover-modal').classList.remove('active');
         _coverBookId = null; _selectedCoverUrl = null;
-        // Reload to show newly imported books
         window.location.reload();
     }
 
@@ -852,7 +886,7 @@
     async function uploadFile(file) {
         if (!file) return;
         const name = file.name.toLowerCase();
-        if (!name.endsWith('.epub') && !name.endsWith('.pdf')) { alert('请选择 .epub 或 .pdf 文件'); return; }
+        if (!name.endsWith('.epub') && !name.endsWith('.pdf')) { alert(t('select-file')); return; }
         const o = document.getElementById('upload-overlay'), 
               s = document.getElementById('upload-status'), 
               err = document.getElementById('upload-error'), 
@@ -860,7 +894,7 @@
               si = document.getElementById('success-icon');
         
         o.classList.add('active'); 
-        s.textContent = `正在导入 "${file.name}"...`; 
+        s.textContent = t('importing') + ` "${file.name}"...`; 
         err.style.display = 'none'; 
         sp.style.display = 'block';
         if (si) si.style.display = 'none';
@@ -868,16 +902,16 @@
         const form = new FormData(); form.append('file', file);
         try {
             const r = await fetch('/api/upload', { method: 'POST', body: form });
-            if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || '导入失败'); }
+            if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || t('import-failed')); }
             const d = await r.json(); 
             
             // Success State
             sp.style.display = 'none';
             if (si) si.style.display = 'block';
-            s.textContent = `《${d.title}》已成功导入`; 
+            s.textContent = t('import-success', {title: d.title}); 
             
             if (!d.has_cover) {
-                s.textContent = `《${d.title}》已导入，正在搜索封面...`;
+                s.textContent = t('import-success-searching', {title: d.title});
                 setTimeout(() => { o.classList.remove('active'); openCoverSearch(d.book_id); }, 1500);
             } else {
                 setTimeout(() => window.location.reload(), 1500);
@@ -885,7 +919,7 @@
         } catch (e) { 
             sp.style.display = 'none'; 
             if (si) si.style.display = 'none';
-            s.textContent = '导入失败'; 
+            s.textContent = t('import-failed'); 
             err.textContent = e.message; 
             err.style.display = 'block'; 
             setTimeout(() => o.classList.remove('active'), 3000); 
@@ -896,15 +930,15 @@
     async function openAppleBooks() {
         document.getElementById('ab-modal').classList.add('active');
         const list = document.getElementById('ab-list');
-        list.innerHTML = '<div class="modal-loading">Loading...</div>';
+        list.innerHTML = `<div class="modal-loading">${t('searching')}</div>`;
         try {
             const r = await fetch('/api/apple-books'); const d = await r.json(); appleBooks = d.books || []; renderAppleBooks();
-        } catch (e) { list.innerHTML = `<div class="modal-loading" style="color:#B3261E">Failed: ${e.message}</div>`; }
+        } catch (e) { list.innerHTML = `<div class="modal-loading" style="color:#B3261E">${t('failed')}: ${e.message}</div>`; }
     }
     function closeAppleBooks() { if (!importing) document.getElementById('ab-modal').classList.remove('active'); }
     function renderAppleBooks() {
         const list = document.getElementById('ab-list');
-        if (!appleBooks.length) { list.innerHTML = '<div class="modal-loading">No books found</div>'; return; }
+        if (!appleBooks.length) { list.innerHTML = `<div class="modal-loading">${t('ab-no-books')}</div>`; return; }
         list.innerHTML = appleBooks.map((b, i) => `
             <div class="modal-item ${b.imported?'imported':''}" id="ab-item-${i}" onclick="${b.imported?'':`toggleBook(${i})`}">
                 <input type="checkbox" ${b.imported?'disabled checked':''} ${b._selected?'checked':''} id="ab-cb-${i}" onclick="event.stopPropagation();toggleBook(${i})" ${b.imported?'disabled':''}>
@@ -922,24 +956,24 @@
     function toggleSelectAll(v) { appleBooks.forEach((b,i)=>{if(!b.imported){b._selected=v;const c=document.getElementById(`ab-cb-${i}`);if(c)c.checked=v;}}); updateSelectedCount(); }
     function updateSelectedCount() {
         const n=appleBooks.filter(b=>b._selected&&!b.imported).length;
-        document.getElementById('ab-selected-count').textContent=`${n} selected`;
+        document.getElementById('ab-selected-count').textContent = t('selected', {n: n});
         document.getElementById('ab-import-btn').disabled=n===0;
         const imp=appleBooks.filter(b=>!b.imported); document.getElementById('ab-select-all').checked=imp.length>0&&imp.every(b=>b._selected);
     }
     async function importSelected() {
         const sel=appleBooks.map((b,i)=>({...b,_idx:i})).filter(b=>b._selected&&!b.imported); if(!sel.length)return;
-        importing=true; document.getElementById('ab-import-btn').disabled=true; document.getElementById('ab-import-btn').textContent='Importing...';
+        importing=true; document.getElementById('ab-import-btn').disabled=true; document.getElementById('ab-import-btn').textContent = t('importing');
         for(const book of sel){
             const i=book._idx, item=document.getElementById(`ab-item-${i}`), badge=document.getElementById(`ab-badge-${i}`);
-            item.classList.add('importing'); badge.className='modal-item-badge importing-badge'; badge.textContent='Importing...'; badge.style.display='';
+            item.classList.add('importing'); badge.className='modal-item-badge importing-badge'; badge.textContent=t('importing'); badge.style.display='';
             try{
                 const r=await fetch('/api/import-local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:book.path})});
                 if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.detail||'Failed');}
-                badge.className='modal-item-badge done-badge'; badge.textContent='Done'; appleBooks[i].imported=true;
-            }catch(e){badge.className='modal-item-badge fail-badge';badge.textContent='Failed';}
+                badge.className='modal-item-badge done-badge'; badge.textContent=t('done'); appleBooks[i].imported=true;
+            }catch(e){badge.className='modal-item-badge fail-badge';badge.textContent=t('failed');}
             item.classList.remove('importing');
         }
-        importing=false; document.getElementById('ab-import-btn').textContent='Import'; updateSelectedCount();
+        importing=false; document.getElementById('ab-import-btn').textContent = t('btn-import'); updateSelectedCount();
         setTimeout(()=>window.location.reload(), 1500);
     }
 </script>
