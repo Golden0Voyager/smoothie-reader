@@ -218,7 +218,6 @@
         .import-menu-item:hover { background: rgba(0,0,0,0.03); }
         .import-menu-item svg { width: 18px; height: 18px; color: var(--outline); flex-shrink: 0; }
 
-        /* Book Grid */
         .book-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -238,6 +237,7 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
             transition: box-shadow 0.3s var(--transition);
             background: linear-gradient(135deg, #e8e0f0 0%, #d0c4e0 100%);
+            margin-top: auto; /* Pushes the cover down so its bottom rests exactly on the info block */
         }
         .book-card:hover .book-cover-wrap {
             box-shadow: 0 4px 12px rgba(0,0,0,0.10), 0 16px 40px rgba(0,0,0,0.10);
@@ -247,12 +247,13 @@
             display: block;
         }
 
-        /* Spine edge effect */
+        /* Spine edge effect (EPUB only) */
         .book-cover-wrap::before {
             content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
             background: linear-gradient(to right, rgba(0,0,0,0.15), rgba(0,0,0,0.02));
             z-index: 1;
         }
+        .book-card[data-format="pdf"] .book-cover-wrap::before { display: none; }
 
         /* Fallback cover (no image) */
         .cover-fallback {
@@ -269,19 +270,44 @@
             font-size: 0.7rem; color: rgba(0,0,0,0.4); margin-top: 8px;
         }
 
-        /* PDF covers: show full page without cropping */
+        /* ── PDF 封面基础样式 ── */
         .book-card[data-format="pdf"] .book-cover-wrap {
-            background: #fff;
-        }
-        .book-card[data-format="pdf"] .book-cover-wrap img {
-            object-fit: contain;
+            background: #ffffff;
+            border: 1px solid rgba(0,0,0,0.05);
         }
 
-        .book-info { padding: 10px 2px 0; flex: 1; display: flex; flex-direction: column; }
+        /* ── 竖版 PDF 封面：保留固有比例，取消强制 3:2，避免裁切 ── */
+        .book-card[data-format="pdf"]:not(.landscape) .book-cover-wrap {
+            aspect-ratio: unset;
+        }
+        .book-card[data-format="pdf"]:not(.landscape) .book-cover-wrap img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* ── 横版卡片（横版封面）占两列宽，采用 padding 计算确保统一高度 ── */
+        .book-card.landscape {
+            grid-column: span 2;
+        }
+        .book-card.landscape .book-cover-wrap {
+            aspect-ratio: unset;
+            height: 0;
+            padding-bottom: calc(75% - 18px); /* height matching 1.5x width of standard single column */
+        }
+        .book-card.landscape .book-cover-wrap > * {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+
+        .book-info { padding: 10px 2px 0; display: flex; flex-direction: column; }
         .book-title {
             font-size: 0.85rem; font-weight: 600; line-height: 1.35;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
             overflow: hidden; margin-bottom: 3px;
+            min-height: 2.7em; /* Forces consistent height across all card info blocks */
         }
         .book-meta {
             display: flex; align-items: center; justify-content: space-between; gap: 6px;
@@ -302,34 +328,65 @@
 
         /* Library toolbar */
         .library-toolbar {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 24px; gap: 16px; flex-wrap: wrap;
+            display: flex; justify-content: flex-end; align-items: center;
+            margin-bottom: 24px; flex-wrap: wrap;
         }
-        .filter-chips { display: flex; gap: 8px; }
+        .control-island {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: var(--surface-container);
+            padding: 4px; border-radius: 20px;
+        }
+        .island-divider {
+            width: 1px; height: 16px;
+            background: var(--outline-variant);
+            margin: 0 4px; opacity: 0.8;
+            flex-shrink: 0;
+        }
+        .filter-chips {
+            display: inline-flex; gap: 0;
+            transition: gap 0.4s cubic-bezier(0.2, 0, 0, 1);
+            overflow: hidden; 
+        }
+        .filter-chips:hover, .filter-chips:focus-within {
+            gap: 4px;
+        }
         .filter-chip {
-            padding: 6px 16px; border-radius: 18px; border: 1.5px solid var(--outline-variant);
-            background: transparent; color: var(--on-surface); font-size: 0.82rem; font-weight: 500;
-            cursor: pointer; transition: all 0.2s var(--transition); user-select: none;
+            padding: 6px 0; border: none; border-radius: 16px;
+            background: transparent; color: var(--outline); font-size: 0.82rem; font-weight: 600;
+            cursor: pointer; transition: all 0.4s cubic-bezier(0.2, 0, 0, 1); user-select: none;
+            max-width: 0;
+            opacity: 0;
+            white-space: nowrap;
         }
-        .filter-chip:hover { border-color: var(--primary); color: var(--primary); }
         .filter-chip.active {
-            background: var(--primary); color: white; border-color: var(--primary);
+            order: 99;
+            padding: 6px 16px;
+            max-width: 120px;
+            opacity: 1;
+            background: white; color: var(--on-surface);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
         }
+        .filter-chips:hover .filter-chip, .filter-chips:focus-within .filter-chip {
+            padding: 6px 16px;
+            max-width: 120px;
+            opacity: 1;
+        }
+        .filter-chip:hover:not(.active) { color: var(--on-surface); background: rgba(0,0,0,0.04); }
         .sort-wrapper { position: relative; }
         .sort-btn {
             display: flex; align-items: center; gap: 6px;
-            padding: 6px 14px; border-radius: 18px; border: 1.5px solid var(--outline-variant);
-            background: transparent; color: var(--on-surface); font-size: 0.82rem; font-weight: 500;
-            cursor: pointer; transition: all 0.2s var(--transition); user-select: none;
+            padding: 6px 16px; border-radius: 16px; border: none;
+            background: transparent; color: var(--on-surface); font-size: 0.82rem; font-weight: 600;
+            cursor: pointer; transition: all 0.2s cubic-bezier(0.2, 0, 0, 1); user-select: none;
         }
-        .sort-btn:hover { border-color: var(--primary); color: var(--primary); }
-        .sort-btn svg { width: 14px; height: 14px; }
-        .sort-btn .sort-arrow { font-size: 0.7rem; opacity: 0.5; }
+        .sort-btn:hover { background: rgba(0,0,0,0.04); }
+        .sort-btn svg { width: 14px; height: 14px; opacity: 0.8; }
+        .sort-btn .sort-arrow { font-size: 0.7rem; opacity: 0.8; }
         .sort-menu {
-            display: none; position: absolute; right: 0; top: calc(100% + 6px);
-            background: white; border: 1px solid var(--outline-variant); border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.10); min-width: 160px; z-index: 100;
-            overflow: hidden; padding: 4px 0;
+            display: none; position: absolute; right: 0; top: calc(100% + 8px);
+            background: white; border: none; border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04); min-width: 160px; z-index: 100;
+            overflow: hidden; padding: 8px 0;
         }
         .sort-menu.open { display: block; }
         .sort-menu-item {
@@ -481,24 +538,24 @@
 
         {% if books %}
         <div class="library-toolbar">
-            <div class="filter-chips">
-                <button class="filter-chip active" data-filter="all" data-t="filter-all" onclick="setFilter('all')">全部</button>
-                <button class="filter-chip" data-filter="epub" onclick="setFilter('epub')">EPUB</button>
-                <button class="filter-chip" data-filter="pdf" onclick="setFilter('pdf')">PDF</button>
-            </div>
-            <div class="sort-wrapper">
-                <button class="sort-btn" onclick="toggleSortMenu(event)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
-                    <span id="sort-label" data-t="sort-title">按标题</span>
-                    <span class="sort-arrow" id="sort-arrow">↑</span>
-                </button>
-                <div class="sort-menu" id="sort-menu">
-                    <div class="sort-menu-item active" data-sort="title" onclick="setSort('title')" data-t="sort-title">按标题</div>
-                    <div class="sort-menu-item" data-sort="author" onclick="setSort('author')" data-t="sort-author">按作者</div>
-                    <div class="sort-menu-item" data-sort="mtime" onclick="setSort('mtime')" data-t="sort-mtime">按添加时间</div>
-                    <div class="sort-menu-divider"></div>
-                    <div class="sort-menu-item" data-dir="asc" onclick="setSortDir(true)"><span data-t="sort-asc">正序 A→Z</span><span class="sort-dir-check" id="dir-asc">✓</span></div>
-                    <div class="sort-menu-item" data-dir="desc" onclick="setSortDir(false)"><span data-t="sort-desc">倒序 Z→A</span><span class="sort-dir-check" id="dir-desc" style="visibility:hidden">✓</span></div>
+            <div class="control-island">
+                <div class="filter-chips">
+                    <button class="filter-chip active" data-filter="all" data-t="filter-all" onclick="setFilter('all')">全部</button>
+                    <button class="filter-chip" data-filter="epub" onclick="setFilter('epub')">EPUB</button>
+                    <button class="filter-chip" data-filter="pdf" onclick="setFilter('pdf')">PDF</button>
+                </div>
+                <div class="island-divider"></div>
+                <div class="sort-wrapper">
+                    <button class="sort-btn" onclick="toggleSortMenu(event)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
+                        <span id="sort-label" data-t="sort-title">按标题</span>
+                        <span class="sort-arrow" id="sort-arrow">↑</span>
+                    </button>
+                    <div class="sort-menu" id="sort-menu">
+                        <div class="sort-menu-item active" data-sort="title" onclick="setSort('title')" data-t="sort-title">按标题</div>
+                        <div class="sort-menu-item" data-sort="author" onclick="setSort('author')" data-t="sort-author">按作者</div>
+                        <div class="sort-menu-item" data-sort="mtime" onclick="setSort('mtime')" data-t="sort-mtime">按添加时间</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -517,6 +574,7 @@
             <a href="{% if book.format == 'pdf' %}/read-pdf/{{ book.id }}{% else %}/read/{{ book.id }}/0{% endif %}" class="book-card" data-book-id="{{ book.id }}" data-original-title="{{ book.original_title }}" data-format="{{ book.format or 'epub' }}" data-author="{{ book.author }}" data-title="{{ book.title }}" data-mtime="{{ book.mtime }}" onclick="return handleCardClick(event)">
                 <div class="book-cover-wrap" id="cover-{{ loop.index }}">
                     <img src="/api/book-cover/{{ book.id }}" alt=""
+                         onload="if(this.naturalWidth>this.naturalHeight){this.closest('.book-card').classList.add('landscape');this.closest('.book-card').dataset.orient='landscape';}else{this.closest('.book-card').dataset.orient='portrait';}"
                          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="cover-fallback" style="display:none">
                         <div class="cover-fallback-title">{{ book.title }}</div>
@@ -1096,26 +1154,35 @@
     }
 
     function setSort(key) {
-        _currentSort = key;
+        if (_currentSort === key) {
+            _sortAsc = !_sortAsc;
+        } else {
+            _currentSort = key;
+            _sortAsc = (key === 'title' || key === 'author') ? true : false;
+            localStorage.setItem('lib_sort', key);
+        }
+        localStorage.setItem('lib_sort_asc', _sortAsc ? '1' : '0');
+
         // Update menu active state
         document.querySelectorAll('.sort-menu-item[data-sort]').forEach(item => {
-            item.classList.toggle('active', item.dataset.sort === key);
+            const isActive = item.dataset.sort === _currentSort;
+            item.classList.toggle('active', isActive);
+            let arrowSpan = item.querySelector('.sort-dir-arr');
+            if (isActive) {
+                if (!arrowSpan) {
+                    item.insertAdjacentHTML('beforeend', `<span class="sort-dir-arr" style="margin-left:auto; font-size:0.75rem;">${_sortAsc ? '↑' : '↓'}</span>`);
+                } else {
+                    arrowSpan.textContent = _sortAsc ? '↑' : '↓';
+                }
+            } else if (arrowSpan) {
+                arrowSpan.remove();
+            }
         });
+        
         // Update button label and arrow
-        document.getElementById('sort-label').textContent = t('sort-' + key);
+        document.getElementById('sort-label').textContent = t('sort-' + _currentSort);
         document.getElementById('sort-arrow').textContent = _sortAsc ? '↑' : '↓';
         closeSortMenu();
-        localStorage.setItem('lib_sort', key);
-        applyFilterAndSort();
-    }
-
-    function setSortDir(asc) {
-        _sortAsc = asc;
-        document.getElementById('sort-arrow').textContent = asc ? '↑' : '↓';
-        document.getElementById('dir-asc').style.visibility = asc ? 'visible' : 'hidden';
-        document.getElementById('dir-desc').style.visibility = asc ? 'hidden' : 'visible';
-        closeSortMenu();
-        localStorage.setItem('lib_sort_asc', asc ? '1' : '0');
         applyFilterAndSort();
     }
 
@@ -1160,7 +1227,8 @@
             } else {
                 cmp = va.localeCompare(vb);
             }
-            return _sortAsc ? cmp : -cmp;
+            if (cmp !== 0) return _sortAsc ? cmp : -cmp;
+            return 0;
         });
 
         // Re-order DOM
@@ -1194,18 +1262,28 @@
         });
         // Update sort menu and button
         document.querySelectorAll('.sort-menu-item[data-sort]').forEach(item => {
-            item.classList.toggle('active', item.dataset.sort === _currentSort);
+            const isActive = item.dataset.sort === _currentSort;
+            item.classList.toggle('active', isActive);
+            if (isActive) {
+                item.insertAdjacentHTML('beforeend', `<span class="sort-dir-arr" style="margin-left:auto; font-size:0.75rem;">${_sortAsc ? '↑' : '↓'}</span>`);
+            }
         });
         const sortLabel = document.getElementById('sort-label');
         const sortArrow = document.getElementById('sort-arrow');
         if (sortLabel) sortLabel.textContent = t('sort-' + _currentSort);
         if (sortArrow) sortArrow.textContent = _sortAsc ? '↑' : '↓';
-        const dirAsc = document.getElementById('dir-asc');
-        const dirDesc = document.getElementById('dir-desc');
-        if (dirAsc) dirAsc.style.visibility = _sortAsc ? 'visible' : 'hidden';
-        if (dirDesc) dirDesc.style.visibility = _sortAsc ? 'hidden' : 'visible';
 
         applyFilterAndSort();
+
+        // Re-sort after cover images load (landscape detection is async)
+        let _resortTimer = null;
+        document.querySelectorAll('.book-card img').forEach(img => {
+            if (img.complete) return;
+            img.addEventListener('load', () => {
+                clearTimeout(_resortTimer);
+                _resortTimer = setTimeout(() => { applyFilterAndSort(); }, 100);
+            });
+        });
     });
 </script>
 </body>
