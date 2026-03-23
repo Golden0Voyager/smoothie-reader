@@ -23,7 +23,13 @@
             min-height: 100vh;
         }
 
-        .container { max-width: 1200px; margin: 0 auto; padding: 48px 40px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 90px 40px 48px; position: relative; }
+
+        .title-wrapper {
+            display: inline-flex;
+            flex-direction: column;
+            position: relative;
+        }
 
         /* Header */
         header {
@@ -77,6 +83,30 @@
             display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
         }
 
+        /* Generic Confirm Modal */
+        .confirm-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+            z-index: 10002; justify-content: center; align-items: center;
+        }
+        .confirm-overlay.active { display: flex; }
+        .confirm-modal {
+            background: white; border-radius: 20px; padding: 28px 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2); width: 90%; max-width: 380px;
+        }
+        .confirm-modal h3 { margin: 0 0 12px; font-size: 1.1rem; font-weight: 700; }
+        .confirm-modal p { margin: 0 0 24px; font-size: 0.9rem; color: var(--outline); line-height: 1.5; }
+        .confirm-modal-actions {
+            display: flex; justify-content: flex-end; gap: 12px;
+        }
+        .confirm-btn {
+            padding: 10px 24px; border-radius: 20px; border: none;
+            font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s;
+        }
+        .confirm-btn.secondary { background: var(--surface-container); color: var(--on-surface); }
+        .confirm-btn.danger { background: #B3261E; color: white; }
+        .confirm-btn.primary { background: var(--primary); color: white; }
+
         /* Cover search modal */
         .cover-modal-overlay {
             display: none; position: fixed; inset: 0;
@@ -122,6 +152,44 @@
         .cover-modal-btn.confirm:disabled { opacity: 0.4; cursor: not-allowed; }
         .cover-modal .loading { text-align: center; padding: 30px 0; color: var(--outline); font-size: 0.9rem; }
 
+
+        /* Language Toggle (Copied from Reader) */
+        #lang-toggle {
+            position: absolute; bottom: calc(100% + 45px); left: 0;
+            z-index: 100;
+            font-size: 0.75rem; font-weight: 900; letter-spacing: 0.05em;
+            color: #fff; cursor: pointer;
+            background: var(--primary); border: none; border-radius: 6px;
+            width: 36px; height: 24px; text-align: center;
+            perspective: 200px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            opacity: 0.8;
+            transition: all 0.3s var(--transition);
+        }
+        #lang-toggle:hover { 
+            transform: translateY(-1px); 
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15); 
+            opacity: 1;
+        }
+        #lang-toggle .lang-inner {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            transition: transform 0.4s ease;
+            transform-style: preserve-3d;
+            position: relative;
+        }
+        #lang-toggle .lang-current,
+        #lang-toggle .lang-target {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            backface-visibility: hidden;
+        }
+        #lang-toggle .lang-target {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; justify-content: center;
+            transform: rotateY(180deg);
+        }
+        #lang-toggle:hover .lang-inner { transform: rotateY(180deg); }
 
         .import-wrapper { position: relative; }
         .import-btn {
@@ -245,6 +313,12 @@
         .upload-status { font-size: 0.95rem; }
         .upload-error { color: #B3261E; margin-top: 10px; font-size: 0.85rem; }
 
+        /* Success checkmark */
+        .success-icon {
+            width: 40px; height: 40px; margin: 0 auto 16px;
+            color: #10B981; display: none;
+        }
+
         /* Apple Books Modal */
         .modal-overlay {
             display: none; position: fixed; inset: 0;
@@ -311,21 +385,29 @@
 <body>
     <div class="container">
         <header>
-            <h1>Library</h1>
+            <div class="title-wrapper">
+                <div id="lang-toggle" onclick="toggleLang()">
+                    <span class="lang-inner">
+                        <span class="lang-current" id="lang-label-curr">中</span>
+                        <span class="lang-target" id="lang-label-next">EN</span>
+                    </span>
+                </div>
+                <h1>Library</h1>
+            </div>
             <div class="header-actions">
                 <div class="import-wrapper">
-                <button class="import-btn" onclick="toggleImportMenu()">
+                    <button class="import-btn" onclick="toggleImportMenu()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Import
+                    <span data-t="btn-import">Import</span>
                 </button>
                 <div class="import-menu" id="import-menu">
                     <div class="import-menu-item" onclick="document.getElementById('file-input').click(); closeImportMenu();">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Upload File
+                        <span data-t="menu-upload">Upload File</span>
                     </div>
                     <div class="import-menu-item" onclick="closeImportMenu(); openAppleBooks();">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-                        Apple Books
+                        <span data-t="menu-apple-books">Apple Books</span>
                     </div>
                 </div>
             </div>
@@ -365,19 +447,19 @@
     <div class="ctx-menu" id="ctx-menu">
         <div class="ctx-menu-item" onclick="ctxRename()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-            重命名
+            <span data-t="ctx-rename">重命名</span>
         </div>
         <div class="ctx-menu-item" onclick="ctxFindCover()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-            换封面
+            <span data-t="ctx-cover">换封面</span>
         </div>
         <div class="ctx-menu-item" onclick="ctxReprocess()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-            重新处理
+            <span data-t="ctx-reprocess">重新处理</span>
         </div>
         <div class="ctx-menu-item danger" onclick="ctxDelete()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            删除
+            <span data-t="ctx-delete">删除</span>
         </div>
     </div>
 
@@ -413,8 +495,23 @@
     <div class="upload-overlay" id="upload-overlay">
         <div class="upload-card">
             <div class="upload-spinner" id="upload-spinner"></div>
-            <div class="upload-status" id="upload-status">Importing...</div>
+            <div class="success-icon" id="success-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="upload-status" id="upload-status" data-t="importing">正在导入...</div>
             <div class="upload-error" id="upload-error" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- Generic Confirm Modal -->
+    <div class="confirm-overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirm()">
+        <div class="confirm-modal">
+            <h3 id="confirm-title" data-t="confirm-title">确认操作</h3>
+            <p id="confirm-message" data-t="confirm-message">您确定要执行此操作吗？</p>
+            <div class="confirm-modal-actions">
+                <button class="confirm-btn secondary" onclick="closeConfirm()" data-t="cancel">取消</button>
+                <button class="confirm-btn" id="confirm-action-btn" data-t="confirm">确定</button>
+            </div>
         </div>
     </div>
 
@@ -446,6 +543,95 @@
     </div>
 
 <script>
+    const I18N_DICT = {
+        zh: {
+            'importing': '正在导入...',
+            'import-success': '《{title}》已成功导入',
+            'import-success-searching': '《{title}》已导入，正在搜索封面...',
+            'import-failed': '导入失败',
+            'confirm-title': '确认操作',
+            'confirm-message': '您确定要执行此操作吗？',
+            'cancel': '取消',
+            'confirm': '确定',
+            'delete-title': '删除书籍',
+            'delete-msg': '确认删除《{title}》吗？此操作不可撤销。',
+            'delete-btn': '删除',
+            'reprocess-title': '重新处理',
+            'reprocess-msg': '确认重新解析《{title}》吗？这通常用于修复目录显示问题。',
+            'reprocess-btn': '重新处理',
+            'select-file': '请选择 .epub 或 .pdf 文件',
+            'ctx-rename': '重命名',
+            'ctx-cover': '换封面',
+            'ctx-reprocess': '重新处理',
+            'ctx-delete': '删除',
+            'btn-import': '导入',
+            'menu-upload': '上传文件',
+            'menu-apple-books': 'Apple 图书'
+        },
+        en: {
+            'importing': 'Importing...',
+            'import-success': '"{title}" imported successfully',
+            'import-success-searching': '"{title}" imported, searching for cover...',
+            'import-failed': 'Import failed',
+            'confirm-title': 'Confirm Action',
+            'confirm-message': 'Are you sure you want to proceed?',
+            'cancel': 'Cancel',
+            'confirm': 'Confirm',
+            'delete-title': 'Delete Book',
+            'delete-msg': 'Are you sure you want to delete "{title}"? This cannot be undone.',
+            'delete-btn': 'Delete',
+            'reprocess-title': 'Reprocess',
+            'reprocess-msg': 'Reprocess "{title}"? This is used to fix table of contents issues.',
+            'reprocess-btn': 'Reprocess',
+            'select-file': 'Please select an .epub or .pdf file',
+            'ctx-rename': 'Rename',
+            'ctx-cover': 'Change Cover',
+            'ctx-reprocess': 'Reprocess',
+            'ctx-delete': 'Delete',
+            'btn-import': 'Import',
+            'menu-upload': 'Upload File',
+            'menu-apple-books': 'Apple Books'
+        }
+    };
+
+    function getLang() {
+        return localStorage.getItem('reader_lang') || (navigator.language.startsWith('zh') ? 'zh' : 'en');
+    }
+
+    function t(key, data = {}) {
+        const lang = getLang();
+        let text = I18N_DICT[lang][key] || key;
+        for (const [k, v] of Object.entries(data)) {
+            text = text.replace(`{${k}}`, v);
+        }
+        return text;
+    }
+
+    function toggleLang() {
+        const newLang = getLang() === 'zh' ? 'en' : 'zh';
+        localStorage.setItem('reader_lang', newLang);
+        location.reload();
+    }
+
+    function applyStaticLang() {
+        const lang = getLang();
+        // Update 3D toggle labels
+        const curr = document.getElementById('lang-label-curr');
+        const next = document.getElementById('lang-label-next');
+        if (curr && next) {
+            curr.textContent = lang === 'zh' ? '中' : 'EN';
+            next.textContent = lang === 'zh' ? 'EN' : '中';
+        }
+
+        // Update static elements with data-t attribute
+        document.querySelectorAll('[data-t]').forEach(el => {
+            const key = el.getAttribute('data-t');
+            el.textContent = t(key);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', applyStaticLang);
+
     let appleBooks = [], importing = false;
 
     // --- Context menu ---
@@ -507,27 +693,46 @@
         openCoverSearch(_ctxBookId);
     }
 
+    // --- Generic Confirm ---
+    let _confirmCallback = null;
+    function showConfirm(title, message, btnText, btnClass, callback) {
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-message').textContent = message;
+        const btn = document.getElementById('confirm-action-btn');
+        btn.textContent = btnText;
+        btn.className = 'confirm-btn ' + btnClass;
+        _confirmCallback = callback;
+        document.getElementById('confirm-modal').classList.add('active');
+    }
+    function closeConfirm() { document.getElementById('confirm-modal').classList.remove('active'); }
+    document.getElementById('confirm-action-btn').onclick = () => {
+        if (_confirmCallback) _confirmCallback();
+        closeConfirm();
+    };
+
     async function ctxReprocess() {
         ctxMenu.classList.remove('active');
-        if (!confirm(`确认重新处理「${_ctxTitle}」？`)) return;
-        try {
-            const r = await fetch(`/api/reprocess/${encodeURIComponent(_ctxBookId)}`, { method: 'POST' });
-            if (!r.ok) throw new Error('Failed');
-            window.location.reload();
-        } catch (e) { alert('重新处理失败：' + e.message); }
+        showConfirm('重新处理', `确认重新解析《${_ctxTitle}》吗？这通常用于修复目录显示问题。`, '重新处理', 'primary', async () => {
+            try {
+                const r = await fetch(`/api/reprocess/${encodeURIComponent(_ctxBookId)}`, { method: 'POST' });
+                if (!r.ok) throw new Error('Failed');
+                window.location.reload();
+            } catch (e) { alert('重新处理失败：' + e.message); }
+        });
     }
 
     async function ctxDelete() {
         ctxMenu.classList.remove('active');
-        if (!confirm(`确认删除「${_ctxTitle}」？此操作不可撤销。`)) return;
-        try {
-            const r = await fetch('/api/delete-books', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ book_ids: [_ctxBookId] })
-            });
-            if (!r.ok) throw new Error('Failed');
-            window.location.reload();
-        } catch (e) { alert('删除失败：' + e.message); }
+        showConfirm('删除书籍', `确认删除《${_ctxTitle}》吗？此操作不可撤销。`, '删除', 'danger', async () => {
+            try {
+                const r = await fetch('/api/delete-books', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ book_ids: [_ctxBookId] })
+                });
+                if (!r.ok) throw new Error('Failed');
+                window.location.reload();
+            } catch (e) { alert('删除失败：' + e.message); }
+        });
     }
 
     function handleCardClick(e) {
@@ -647,22 +852,44 @@
     async function uploadFile(file) {
         if (!file) return;
         const name = file.name.toLowerCase();
-        if (!name.endsWith('.epub') && !name.endsWith('.pdf')) { alert('Please select an .epub or .pdf file'); return; }
-        const o = document.getElementById('upload-overlay'), s = document.getElementById('upload-status'), err = document.getElementById('upload-error'), sp = document.getElementById('upload-spinner');
-        o.classList.add('active'); s.textContent = `Importing "${file.name}"...`; err.style.display = 'none'; sp.style.display = 'block';
+        if (!name.endsWith('.epub') && !name.endsWith('.pdf')) { alert('请选择 .epub 或 .pdf 文件'); return; }
+        const o = document.getElementById('upload-overlay'), 
+              s = document.getElementById('upload-status'), 
+              err = document.getElementById('upload-error'), 
+              sp = document.getElementById('upload-spinner'),
+              si = document.getElementById('success-icon');
+        
+        o.classList.add('active'); 
+        s.textContent = `正在导入 "${file.name}"...`; 
+        err.style.display = 'none'; 
+        sp.style.display = 'block';
+        if (si) si.style.display = 'none';
+
         const form = new FormData(); form.append('file', file);
         try {
             const r = await fetch('/api/upload', { method: 'POST', body: form });
-            if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || 'Failed'); }
-            const d = await r.json(); s.textContent = `"${d.title}" imported!`; sp.style.display = 'none';
+            if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || '导入失败'); }
+            const d = await r.json(); 
+            
+            // Success State
+            sp.style.display = 'none';
+            if (si) si.style.display = 'block';
+            s.textContent = `《${d.title}》已成功导入`; 
+            
             if (!d.has_cover) {
-                // No cover found — auto-search and let user pick
-                s.textContent = `"${d.title}" imported! Searching for cover...`;
-                setTimeout(() => { o.classList.remove('active'); openCoverSearch(d.book_id); }, 600);
+                s.textContent = `《${d.title}》已导入，正在搜索封面...`;
+                setTimeout(() => { o.classList.remove('active'); openCoverSearch(d.book_id); }, 1500);
             } else {
-                setTimeout(() => window.location.reload(), 600);
+                setTimeout(() => window.location.reload(), 1500);
             }
-        } catch (e) { sp.style.display = 'none'; s.textContent = 'Import failed'; err.textContent = e.message; err.style.display = 'block'; setTimeout(() => o.classList.remove('active'), 3000); }
+        } catch (e) { 
+            sp.style.display = 'none'; 
+            if (si) si.style.display = 'none';
+            s.textContent = '导入失败'; 
+            err.textContent = e.message; 
+            err.style.display = 'block'; 
+            setTimeout(() => o.classList.remove('active'), 3000); 
+        }
     }
 
     // --- Apple Books ---
@@ -713,7 +940,7 @@
             item.classList.remove('importing');
         }
         importing=false; document.getElementById('ab-import-btn').textContent='Import'; updateSelectedCount();
-        setTimeout(()=>window.location.reload(),1000);
+        setTimeout(()=>window.location.reload(), 1500);
     }
 </script>
 </body>
