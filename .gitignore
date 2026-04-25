@@ -48,3 +48,6 @@ settings.local.json
 
 # PDCA 状态文件（补全根目录下的路径，截获 .pdca-status.json）
 .pdca-status.json
+
+# Local book storage and cache
+books/
