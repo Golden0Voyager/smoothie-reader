@@ -1,3 +1,10 @@
+## ⚠️ 环境约束（强制）
+
+- **包管理器**：`uv pip install <pkg>`（禁止 `pip` / `python -m pip`）
+- **运行脚本**：`uv run python <script>.py`（禁止直接 `python`）
+
+---
+
 # Reader3 — AI 智能电子书阅读器
 
 ## 项目简介
@@ -26,7 +33,6 @@ python tools/_md2pdf.py
 
 ## 开发规范
 
-- **包管理**：始终使用 `uv pip install`，不用 pip
 - **语言**：始终用中文回复
 - **前端**：reader.html 是单文件架构（CSS + HTML + JS），不拆分
 - **数据存储**：图书数据 `{name}_data/book.pkl`（pickle），高亮笔记在浏览器 localStorage
