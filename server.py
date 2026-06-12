@@ -661,7 +661,8 @@ def _find_cover_image(book_id: str) -> str | None:
     # 1. Marker file left by process_epub (most reliable)
     marker = os.path.join(BOOKS_DIR, book_id, "cover_image.txt")
     if os.path.exists(marker):
-        fname = open(marker).read().strip()
+        with open(marker) as f:
+            fname = f.read().strip()
         path = os.path.join(images_dir, fname)
         if os.path.exists(path):
             return path
@@ -805,7 +806,10 @@ async def delete_books(req: dict):
     for bid in book_ids:
         safe_id = os.path.basename(bid)
         book_dir = os.path.join(BOOKS_DIR, safe_id)
-        if os.path.isdir(book_dir) and os.path.exists(os.path.join(book_dir, "book.pkl")):
+        if os.path.isdir(book_dir) and (
+            os.path.exists(os.path.join(book_dir, "book.pkl")) or
+            os.path.exists(os.path.join(book_dir, "book.pdf"))
+        ):
             await asyncio.to_thread(shutil.rmtree, book_dir)
             deleted.append(safe_id)
     load_book_cached.cache_clear()
@@ -1779,11 +1783,11 @@ async def search_pdf(book_id: str, req: dict):
             page = doc[page_num]
             text_instances = page.search_for(query)
             if text_instances:
-                # Get page text for snippet extraction
                 page_text = page.get_text("text")
+                lower_text = page_text.lower()
+                lower_query = query.lower()
                 for rect in text_instances:
-                    # Extract snippet around match
-                    idx = page_text.lower().find(query.lower())
+                    idx = lower_text.find(lower_query)
                     if idx >= 0:
                         start = max(0, idx - 40)
                         end = min(len(page_text), idx + len(query) + 40)
@@ -1841,7 +1845,10 @@ async def search_cover_online(book_id: str, req: dict = None):
 
     # --- Douban (better for Chinese books) ---
     try:
-        dquery = custom_query if custom_query else _re.sub(r'[\\/:*?"<>|]', '', book.metadata.title).strip()
+        dquery = custom_query if custom_query else (
+            _re.sub(r'[\\/:*?"<>|]', '', book.metadata.title).strip() if book else
+            _re.sub(r'[\\/:*?"<>|]', '', query).strip()
+        )
         durl = f"https://book.douban.com/j/subject_suggest?q={urllib.parse.quote(dquery)}"
         def _fetch_douban():
             req = urllib.request.Request(durl, headers={
@@ -1977,7 +1984,7 @@ async def set_cover_from_url(book_id: str, req: dict):
 
 def auto_import_default_books():
     """Scan assets/ for specific default EPUBs and import them if not already in library."""
-    default_book = os.path.join("assets", "Meditations by Emperor of Rome Marcus Aurelius.epub")
+    default_book = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "Meditations by Emperor of Rome Marcus Aurelius.epub")
     if not os.path.exists(default_book):
         return
 

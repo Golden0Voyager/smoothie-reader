@@ -14,13 +14,16 @@
 # Dictionary data
 dict/
 
-# Test files
-test_*.py
+# Test files (root only)
+/test_*.py
 
 # Python
 __pycache__/
 *.pyc
 .venv/
+
+# Coverage
+.coverage
 
 # OS
 .DS_Store

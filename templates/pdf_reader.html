@@ -632,12 +632,14 @@
     function t(key) { return (_lang === 'zh' && _i18n[key]) ? _i18n[key] : key; }
     function _md(s) {
         if (!s) return s;
-        return s.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h3>$1</h3>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
-            .replace(/^[-*] (.+)$/gm, '<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/gs, '<ul>$&</ul>')
-            .replace(/\n{2,}/g, '</p><p>').replace(/^(?!<[hupol])(.+)/gm, '<p>$1</p>').replace(/<p><\/p>/g, '');
+        function _esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+        return s
+            .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => '<pre><code>' + _esc(code) + '</code></pre>')
+            .replace(/`([^`]+)`/g, (_, code) => '<code>' + _esc(code) + '</code>')
+            .replace(/^### (.+)$/gm, (_, t) => '<h4>' + _esc(t) + '</h4>').replace(/^## (.+)$/gm, (_, t) => '<h3>' + _esc(t) + '</h3>').replace(/^# (.+)$/gm, (_, t) => '<h3>' + _esc(t) + '</h3>')
+            .replace(/\*\*(.+?)\*\*/g, (_, t) => '<strong>' + _esc(t) + '</strong>').replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_, t) => '<em>' + _esc(t) + '</em>')
+            .replace(/^[-*] (.+)$/gm, (_, t) => '<li>' + _esc(t) + '</li>').replace(/(<li>.*<\/li>\n?)+/gs, '<ul>$&</ul>')
+            .replace(/\n{2,}/g, '</p><p>').replace(/^(?!<[hupol])(.+)/gm, (_, t) => '<p>' + _esc(t) + '</p>').replace(/<p><\/p>/g, '');
     }
     // Apply i18n
     if (_lang === 'zh') {
@@ -1373,21 +1375,22 @@
                 const resp = await fetch('/api/quick-translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
                 const data = await resp.json();
                 let html = '';
+                function _escH(t) { return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
                 const safe = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ');
                 const spk = `<button onclick="Sel._speak('${safe}')" style="background:none;border:none;cursor:pointer;padding:2px 4px;vertical-align:middle;opacity:0.5;transition:opacity 0.2s" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" title="${t('Pronounce')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>`;
                 if (data.source === 'dict') {
-                    html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${data.word}</b>`;
-                    if (data.phonetic) html += ` <span style="opacity:0.6">/${data.phonetic}/</span>`;
+                    html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${_escH(data.word)}</b>`;
+                    if (data.phonetic) html += ` <span style="opacity:0.6">/${_escH(data.phonetic)}/</span>`;
                     html += ` ${spk}</div>`;
-                    if (data.translation) html += `<div class="lookup-translation">${data.translation.replace(/\n/g, '<br>')}</div>`;
-                    if (data.definition) html += `<div class="lookup-explanation" style="margin-top:6px;font-size:0.78rem">${data.definition.split('\n').slice(0, 2).join('<br>')}</div>`;
+                    if (data.translation) html += `<div class="lookup-translation">${_escH(data.translation).replace(/\n/g, '<br>')}</div>`;
+                    if (data.definition) html += `<div class="lookup-explanation" style="margin-top:6px;font-size:0.78rem">${_escH(data.definition).split('\n').slice(0, 2).join('<br>')}</div>`;
                 } else if (data.source === 'cn-dict' || data.source === 'ai-dict') {
-                    html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${data.word}</b>`;
-                    if (data.pinyin) html += ` <span style="opacity:0.6">${data.pinyin}</span>`;
+                    html += `<div style="font-size:0.75rem;color:var(--secondary);margin-bottom:6px"><b>${_escH(data.word)}</b>`;
+                    if (data.pinyin) html += ` <span style="opacity:0.6">${_escH(data.pinyin)}</span>`;
                     html += ` ${spk}</div>`;
-                    html += `<div class="lookup-translation">${data.translation.replace(/\n/g, '<br>')}</div>`;
+                    html += `<div class="lookup-translation">${_escH(data.translation).replace(/\n/g, '<br>')}</div>`;
                 } else if (data.translation) {
-                    html += `<div class="lookup-translation">${data.translation} ${spk}</div>`;
+                    html += `<div class="lookup-translation">${_escH(data.translation)} ${spk}</div>`;
                 }
                 el.innerHTML = html || '<div class="lookup-loading">无结果</div>';
                 this._showLookup();
@@ -1461,7 +1464,8 @@
             }
             status.textContent = `${this._results.length} ${t('results found')}`;
             container.innerHTML = this._results.map((r, idx) => {
-                const snippet = r.snippet.replace(new RegExp(`(${this._query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark>$1</mark>');
+                const safeSnippet = r.snippet.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]));
+                const snippet = safeSnippet.replace(new RegExp(`(${this._query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark>$1</mark>');
                 return `<div class="sp-item" onclick="Search.goTo(${idx})"><span class="sp-page">${t('Page')} ${r.page}</span><div class="sp-snippet">${snippet}</div></div>`;
             }).join('');
         },
