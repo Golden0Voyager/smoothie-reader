@@ -130,7 +130,17 @@ def parse_toc_recursive(toc_list, depth=0) -> List[TOCEntry]:
                 )
                 result.append(entry)
             elif isinstance(item, epub.Section):
-                 href = item.href or ""
+                 href = ""
+                 if hasattr(item, 'href') and item.href:
+                     h = item.href
+                     if isinstance(h, list) and h:
+                         first = h[0]
+                         if isinstance(first, epub.Link):
+                             href = first.href
+                         else:
+                             href = str(first)
+                     elif isinstance(h, str):
+                         href = h
                  entry = TOCEntry(
                     title=item.title or "Untitled",
                     href=href,
@@ -299,6 +309,7 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
             seen.add(name)
 
     spine_chapters = []
+    order_counter = 0
     for i, name in enumerate(final_names_ordered):
         item = all_docs[name]
         item_id = item.get_id()
@@ -339,12 +350,13 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
             chapter = ChapterContent(
                 id=item_id,
                 href=name, 
-                title=f"Section {i+1}", 
+                title=f"Section {order_counter + 1}", 
                 content=final_html,
                 text=extract_plain_text(soup),
-                order=i
+                order=order_counter
             )
             spine_chapters.append(chapter)
+            order_counter += 1
         except Exception as e:
             print(f"Error processing chapter {name}: {e}")
 

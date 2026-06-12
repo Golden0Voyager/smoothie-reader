@@ -17,3 +17,15 @@ dependencies = [
     "python-multipart>=0.0.22",
     "uvicorn>=0.38.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["server", "reader3"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
