@@ -1,21 +1,18 @@
-import os
 import json
-import hashlib
+import os
 import pickle
-import zlib
-import asyncio
-import tempfile
 import shutil
-from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
-from pathlib import Path
+import tempfile
+import zlib
 from io import BytesIO
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 from ebooklib import epub
+from fastapi.testclient import TestClient
 
 import server
-from reader3 import BookMetadata, Book, ChapterContent, TOCEntry
+from reader3 import Book, BookMetadata, ChapterContent
 
 
 @pytest.fixture
@@ -283,10 +280,9 @@ class TestLibraryIndex:
     def test_build_empty(self, tmp_dir):
         books_dir = os.path.join(tmp_dir, 'books')
         index_path = os.path.join(books_dir, '.library_index.json')
-        with patch.object(server, 'BOOKS_DIR', books_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                os.makedirs(books_dir, exist_ok=True)
-                assert server._build_library_index() == {}
+        with patch.object(server, 'BOOKS_DIR', books_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            os.makedirs(books_dir, exist_ok=True)
+            assert server._build_library_index() == {}
 
     def test_build_with_pdf_book(self, tmp_dir):
         books_dir = os.path.join(tmp_dir, 'books')
@@ -297,11 +293,10 @@ class TestLibraryIndex:
         with open(os.path.join(book_dir, 'meta.json'), 'w') as f:
             json.dump(meta, f)
         index_path = os.path.join(books_dir, '.library_index.json')
-        with patch.object(server, 'BOOKS_DIR', books_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                result = server._build_library_index()
-                assert 'test_data' in result
-                assert result['test_data']['title'] == 'Test PDF'
+        with patch.object(server, 'BOOKS_DIR', books_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            result = server._build_library_index()
+            assert 'test_data' in result
+            assert result['test_data']['title'] == 'Test PDF'
 
     def test_build_removes_deleted(self, tmp_dir):
         books_dir = os.path.join(tmp_dir, 'books')
@@ -309,9 +304,8 @@ class TestLibraryIndex:
         index_path = os.path.join(books_dir, '.library_index.json')
         with open(index_path, 'w') as f:
             json.dump({'deleted_data': {'title': 'Gone'}}, f)
-        with patch.object(server, 'BOOKS_DIR', books_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                assert 'deleted_data' not in server._build_library_index()
+        with patch.object(server, 'BOOKS_DIR', books_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            assert 'deleted_data' not in server._build_library_index()
 
     def test_build_with_pkl(self, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'epub_book_data')
@@ -323,12 +317,11 @@ class TestLibraryIndex:
         with open(os.path.join(book_dir, 'book.pkl'), 'wb') as f:
             pickle.dump(book, f)
         index_path = os.path.join(tmp_dir, '.library_index.json')
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                result = server._build_library_index()
-                assert 'epub_book_data' in result
-                assert result['epub_book_data']['title'] == 'Indexed Book'
-                assert result['epub_book_data']['format'] == 'epub'
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            result = server._build_library_index()
+            assert 'epub_book_data' in result
+            assert result['epub_book_data']['title'] == 'Indexed Book'
+            assert result['epub_book_data']['format'] == 'epub'
 
     def test_build_with_old_display_title(self, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'old_title_data')
@@ -339,10 +332,9 @@ class TestLibraryIndex:
         index_path = os.path.join(tmp_dir, '.library_index.json')
         with open(index_path, 'w') as f:
             json.dump({'old_title_data': {'display_title': 'My Custom Title'}}, f)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                result = server._build_library_index()
-                assert result['old_title_data']['display_title'] == 'My Custom Title'
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            result = server._build_library_index()
+            assert result['old_title_data']['display_title'] == 'My Custom Title'
 
     def test_build_existing_index_uptodate(self, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'cached_data')
@@ -355,16 +347,14 @@ class TestLibraryIndex:
         index_path = os.path.join(tmp_dir, '.library_index.json')
         with open(index_path, 'w') as f:
             json.dump({'cached_data': {'title': 'Cached', '_mtime': mtime}}, f)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                assert 'cached_data' in server._build_library_index()
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            assert 'cached_data' in server._build_library_index()
 
     def test_build_no_books_dir(self, tmp_dir):
         books_dir = os.path.join(tmp_dir, 'nonexistent_books')
         index_path = os.path.join(books_dir, '.library_index.json')
-        with patch.object(server, 'BOOKS_DIR', books_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                assert server._build_library_index() == {}
+        with patch.object(server, 'BOOKS_DIR', books_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            assert server._build_library_index() == {}
 
     def test_build_existing_no_change(self, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'cached_data')
@@ -377,17 +367,15 @@ class TestLibraryIndex:
         index_path = os.path.join(tmp_dir, '.library_index.json')
         with open(index_path, 'w') as f:
             json.dump({'cached_data': {'title': 'Cached', '_mtime': mtime}}, f)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                assert 'cached_data' in server._build_library_index()
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            assert 'cached_data' in server._build_library_index()
 
     def test_build_bad_json_index(self, tmp_dir):
         index_path = os.path.join(tmp_dir, '.library_index.json')
         with open(index_path, 'w') as f:
             f.write('not json')
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                assert server._build_library_index() == {}
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            assert server._build_library_index() == {}
 
     def test_build_pkl_no_change(self, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'unchanged_pkl_data')
@@ -402,11 +390,10 @@ class TestLibraryIndex:
         index_path = os.path.join(tmp_dir, '.library_index.json')
         with open(index_path, 'w') as f:
             json.dump({'unchanged_pkl_data': {'title': 'Unchanged', '_mtime': pkl_mtime}}, f)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                result = server._build_library_index()
-                assert 'unchanged_pkl_data' in result
-                assert result['unchanged_pkl_data']['title'] == 'Unchanged'
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            result = server._build_library_index()
+            assert 'unchanged_pkl_data' in result
+            assert result['unchanged_pkl_data']['title'] == 'Unchanged'
 
     def test_build_pdf_no_change(self, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'unchanged_pdf_data')
@@ -419,9 +406,8 @@ class TestLibraryIndex:
         index_path = os.path.join(tmp_dir, '.library_index.json')
         with open(index_path, 'w') as f:
             json.dump({'unchanged_pdf_data': {'title': 'Cached PDF', '_mtime': mtime}}, f)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch.object(server, '_LIBRARY_INDEX', index_path):
-                assert 'unchanged_pdf_data' in server._build_library_index()
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch.object(server, '_LIBRARY_INDEX', index_path):
+            assert 'unchanged_pdf_data' in server._build_library_index()
 
 
 # ============================================================
@@ -775,9 +761,8 @@ class TestAICallFunctions:
 class TestAIComplete:
     @pytest.mark.asyncio
     async def test_no_providers(self):
-        with patch.object(server, '_get_enabled_providers', return_value=[]):
-            with pytest.raises(Exception):
-                await server._ai_complete("prompt")
+        with patch.object(server, '_get_enabled_providers', return_value=[]), pytest.raises(Exception):
+            await server._ai_complete("prompt")
 
     @pytest.mark.asyncio
     async def test_success_openai(self):
@@ -1163,7 +1148,7 @@ class TestProcessPdf:
         os.makedirs(out_dir, exist_ok=True)
         dest_pdf = os.path.join(out_dir, 'book.pdf')
         shutil.copy2(pdf_path, dest_pdf)
-        result = server._process_pdf(pdf_path, out_dir)
+        server._process_pdf(pdf_path, out_dir)
         assert os.path.exists(dest_pdf)
 
 
@@ -1212,7 +1197,7 @@ class TestReadChapter:
             os.makedirs(os.path.join(tmp_dir, book_id, 'images'), exist_ok=True)
             with open(os.path.join(tmp_dir, book_id, 'images', 'img.png'), 'wb') as f:
                 f.write(b'png')
-            response = client.get(f'/read/images/img.png', headers={'referer': f'/read/{book_id}/0'})
+            response = client.get('/read/images/img.png', headers={'referer': f'/read/{book_id}/0'})
             assert response.status_code == 200
 
     def test_read_chapter_with_svg(self, client, mock_book_dir):
@@ -1638,11 +1623,10 @@ class TestImportLocal:
         book.add_item(epub.EpubNav())
         book.spine = [c]
         epub.write_epub(epub_path, book, {})
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('shutil.copy2'):
-                response = client.post('/api/import-local', json={"path": epub_path})
-                assert response.status_code == 200
-                assert response.json()['success'] is True
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('shutil.copy2'):
+            response = client.post('/api/import-local', json={"path": epub_path})
+            assert response.status_code == 200
+            assert response.json()['success'] is True
 
     def test_import_local_epub_copy_fallback(self, client, tmp_dir):
         epub_path = os.path.join(tmp_dir, 'fallback.epub')
@@ -1688,13 +1672,12 @@ class TestUpload:
         epub_buf = BytesIO()
         epub.write_epub(epub_buf, book, {})
         epub_buf.seek(0)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('shutil.copy2'):
-                with patch.object(server, '_find_cover_image', return_value=None):
-                    data = {'file': ('test.epub', epub_buf, 'application/epub+zip')}
-                    response = client.post('/api/upload', files=data)
-                    assert response.status_code == 200
-                    assert response.json()['success'] is True
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('shutil.copy2'):
+            with patch.object(server, '_find_cover_image', return_value=None):
+                data = {'file': ('test.epub', epub_buf, 'application/epub+zip')}
+                response = client.post('/api/upload', files=data)
+                assert response.status_code == 200
+                assert response.json()['success'] is True
 
     def test_upload_processing_error(self, client, tmp_dir):
         with patch.object(server, 'BOOKS_DIR', tmp_dir):
@@ -1752,22 +1735,22 @@ class TestSetCover:
     def test_set_cover_success(self, client, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'cover_set')
         os.makedirs(os.path.join(book_dir, 'images'), exist_ok=True)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('urllib.request.urlopen') as mock_url:
-                from PIL import Image
-                import io
-                img = Image.new('RGB', (10, 10), (200, 200, 200))
-                buf = io.BytesIO()
-                img.save(buf, 'JPEG')
-                jpeg_bytes = buf.getvalue()
-                mock_resp = MagicMock()
-                mock_resp.read.return_value = jpeg_bytes
-                mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-                mock_resp.__exit__ = MagicMock(return_value=False)
-                mock_url.return_value = mock_resp
-                response = client.post('/api/set-cover/cover_set', json={"image_url": "https://example.com/cover.jpg"})
-                assert response.status_code == 200
-                assert os.path.exists(os.path.join(book_dir, 'cover_image.txt'))
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('urllib.request.urlopen') as mock_url:
+            import io
+
+            from PIL import Image
+            img = Image.new('RGB', (10, 10), (200, 200, 200))
+            buf = io.BytesIO()
+            img.save(buf, 'JPEG')
+            jpeg_bytes = buf.getvalue()
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = jpeg_bytes
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_url.return_value = mock_resp
+            response = client.post('/api/set-cover/cover_set', json={"image_url": "https://example.com/cover.jpg"})
+            assert response.status_code == 200
+            assert os.path.exists(os.path.join(book_dir, 'cover_image.txt'))
 
 
 class TestSaveProviders:
@@ -2184,11 +2167,10 @@ class TestDictDownload:
                     assert response.status_code == 200
 
     def test_download_error_cleanup(self, client, tmp_dir):
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('urllib.request.build_opener') as mock_opener:
-                mock_opener.return_value.open.side_effect = Exception("Network error")
-                response = client.post('/api/dict/download', json={"id": "ecdict"})
-                assert response.status_code == 200
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('urllib.request.build_opener') as mock_opener:
+            mock_opener.return_value.open.side_effect = Exception("Network error")
+            response = client.post('/api/dict/download', json={"id": "ecdict"})
+            assert response.status_code == 200
 
 
 class TestPdfSearch:
@@ -2541,10 +2523,9 @@ class TestImportLocalPdf:
         doc.set_metadata({"title": "Test PDF", "author": "Author"})
         doc.save(pdf_path)
         doc.close()
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('shutil.copy2'):
-                response = client.post('/api/import-local', json={"path": pdf_path})
-                assert response.status_code == 200
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('shutil.copy2'):
+            response = client.post('/api/import-local', json={"path": pdf_path})
+            assert response.status_code == 200
 
 
 # ============================================================
@@ -2557,19 +2538,18 @@ class TestUploadPdf:
             import fitz
         except ImportError:
             pytest.skip("PyMuPDF not installed")
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('shutil.copy2'):
-                doc = fitz.open()
-                page = doc.new_page()
-                page.insert_text((72, 72), "Test PDF")
-                doc.set_metadata({"title": "Uploaded PDF", "author": "Author"})
-                pdf_buf = BytesIO()
-                doc.save(pdf_buf)
-                doc.close()
-                pdf_buf.seek(0)
-                data = {'file': ('test.pdf', pdf_buf, 'application/pdf')}
-                response = client.post('/api/upload', files=data)
-                assert response.status_code == 200
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('shutil.copy2'):
+            doc = fitz.open()
+            page = doc.new_page()
+            page.insert_text((72, 72), "Test PDF")
+            doc.set_metadata({"title": "Uploaded PDF", "author": "Author"})
+            pdf_buf = BytesIO()
+            doc.save(pdf_buf)
+            doc.close()
+            pdf_buf.seek(0)
+            data = {'file': ('test.pdf', pdf_buf, 'application/pdf')}
+            response = client.post('/api/upload', files=data)
+            assert response.status_code == 200
 
 
 # ============================================================
@@ -2711,32 +2691,31 @@ class TestImportLocalEdge:
         book.spine = [c]
         epub.write_epub(epub_path, book, {})
 
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('shutil.copy2'):
-                response = client.post('/api/import-local', json={"path": epub_path})
-                assert response.status_code == 200
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('shutil.copy2'):
+            response = client.post('/api/import-local', json={"path": epub_path})
+            assert response.status_code == 200
 
 
 class TestSetCoverSuccess:
     def test_set_cover_with_real_image(self, client, tmp_dir):
         book_dir = os.path.join(tmp_dir, 'real_cover')
         os.makedirs(os.path.join(book_dir, 'images'), exist_ok=True)
-        with patch.object(server, 'BOOKS_DIR', tmp_dir):
-            with patch('urllib.request.urlopen') as mock_url:
-                from PIL import Image
-                import io
-                img = Image.new('RGB', (10, 10), (200, 200, 200))
-                buf = io.BytesIO()
-                img.save(buf, 'JPEG')
-                jpeg_bytes = buf.getvalue()
-                mock_resp = MagicMock()
-                mock_resp.read.return_value = jpeg_bytes
-                mock_resp.__enter__ = MagicMock(return_value=mock_resp)
-                mock_resp.__exit__ = MagicMock(return_value=False)
-                mock_url.return_value = mock_resp
-                response = client.post('/api/set-cover/real_cover', json={"image_url": "https://example.com/cover.jpg"})
-                assert response.status_code == 200
-                assert os.path.exists(os.path.join(book_dir, 'cover_image.txt'))
+        with patch.object(server, 'BOOKS_DIR', tmp_dir), patch('urllib.request.urlopen') as mock_url:
+            import io
+
+            from PIL import Image
+            img = Image.new('RGB', (10, 10), (200, 200, 200))
+            buf = io.BytesIO()
+            img.save(buf, 'JPEG')
+            jpeg_bytes = buf.getvalue()
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = jpeg_bytes
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_url.return_value = mock_resp
+            response = client.post('/api/set-cover/real_cover', json={"image_url": "https://example.com/cover.jpg"})
+            assert response.status_code == 200
+            assert os.path.exists(os.path.join(book_dir, 'cover_image.txt'))
 
 
 class TestSaveProvidersEmptyId:

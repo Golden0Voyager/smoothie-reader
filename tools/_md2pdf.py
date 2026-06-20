@@ -1,5 +1,6 @@
 """Convert docs/*.md to styled PDFs in package/ via HTML + Playwright (Chromium)."""
 import os
+
 import markdown
 from playwright.sync_api import sync_playwright
 
@@ -8,7 +9,7 @@ MD_FILES = ['INTRODUCTION.md', 'GUIDE.md']
 
 
 def md_to_html(md_path):
-    with open(md_path, 'r') as f:
+    with open(md_path) as f:
         md_text = f.read()
 
     body = markdown.markdown(md_text, extensions=['tables', 'fenced_code'])

@@ -1,6 +1,8 @@
-import pickle
 import os
+import pickle
 import sys
+import traceback
+
 
 # === 空壳类名单 (保持不动，防止报错) ===
 class Book: pass
@@ -16,19 +18,19 @@ class Text: pass
 
 def convert_pkl_to_txt(pkl_path):
     print(f"🚀 开始处理: {pkl_path}")
-    
+
     if not os.path.exists(pkl_path):
         print(f"❌ 错误：找不到文件 {pkl_path}")
         return
 
     try:
-        print(f"📖 正在解冻数据...")
+        print("📖 正在解冻数据...")
         with open(pkl_path, 'rb') as f:
             book_data = pickle.load(f)
-        
+
         output_path = pkl_path.replace('.pkl', '.txt')
         extracted_text = []
-        
+
         print("✅ 解冻成功！")
 
         # === 核心提取逻辑：递归挖掘机 ===
@@ -37,7 +39,7 @@ def convert_pkl_to_txt(pkl_path):
             if isinstance(obj, str): return obj.strip()
             if isinstance(obj, (int, float, bool)): return ""
             if obj is None: return ""
-            
+
             # 防止递归太深
             if level > 5: return ""
 
@@ -47,18 +49,18 @@ def convert_pkl_to_txt(pkl_path):
             if isinstance(obj, (list, tuple)):
                 for item in obj:
                     results.append(extract_text(item, level + 1))
-            
+
             # 3. 如果是字典
             elif isinstance(obj, dict):
                 for v in obj.values():
                     results.append(extract_text(v, level + 1))
-            
+
             # 4. 如果是对象 (Book, Chapter 等)
             elif hasattr(obj, '__dict__'):
                 # 优先寻找像文本的属性
                 priority_attrs = ['content', 'text', 'raw_text', '_content', 'lines', 'paragraphs']
                 found_text = False
-                
+
                 # 先看有没有直接的文本属性
                 for attr in priority_attrs:
                     if hasattr(obj, attr):
@@ -66,7 +68,7 @@ def convert_pkl_to_txt(pkl_path):
                         if val:
                             results.append(extract_text(val, level + 1))
                             found_text = True
-                
+
                 # 如果没有显式文本属性，就遍历所有属性试试
                 if not found_text:
                     for val in obj.__dict__.values():
@@ -75,7 +77,7 @@ def convert_pkl_to_txt(pkl_path):
             return "\n".join(filter(None, results))
 
         # === 针对你的数据结构进行提取 ===
-        
+
         # 1. 尝试提取书名 (metadata)
         if hasattr(book_data, 'metadata'):
             meta_text = extract_text(book_data.metadata)
@@ -88,7 +90,7 @@ def convert_pkl_to_txt(pkl_path):
             for i, item in enumerate(book_data.spine):
                 # 尝试提取这一节的文本
                 chapter_text = extract_text(item)
-                
+
                 # 如果提取到了内容，才写入
                 if len(chapter_text) > 10: # 忽略太短的碎片
                     extracted_text.append(f"\n\n=== 第 {i+1} 部分 ===\n\n{chapter_text}")
@@ -103,8 +105,8 @@ def convert_pkl_to_txt(pkl_path):
             final_content = "\n".join(extracted_text)
             with open(output_path, 'w', encoding='utf-8') as f_out:
                 f_out.write(final_content)
-            
-            print(f"\n🎉 胜利！提取完成！")
+
+            print("\n🎉 胜利！提取完成！")
             print(f"📄 文件大小: {len(final_content)} 字符")
             print(f"👉 文本文件已保存至: {output_path}")
         else:
