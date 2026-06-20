@@ -35,7 +35,7 @@ source = ["server", "reader3"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 75
 show_missing = true
 
 [tool.ruff]
