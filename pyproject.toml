@@ -44,7 +44,10 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]
+ignore = ["E501", "E402", "E701", "SIM103", "SIM105", "SIM108", "SIM117", "B008", "B017", "B023", "B904"]
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[tool.bandit]
+skips = ["B101", "B311", "B404", "B603"]

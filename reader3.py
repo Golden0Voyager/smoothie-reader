@@ -6,13 +6,12 @@ import os
 import pickle
 import shutil
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any
 from datetime import datetime
 from urllib.parse import unquote
 
 import ebooklib
-from ebooklib import epub
 from bs4 import BeautifulSoup, Comment
+from ebooklib import epub
 
 # --- Data structures ---
 
@@ -37,7 +36,7 @@ class TOCEntry:
     href: str         # original href (e.g., 'part01.html#chapter1')
     file_href: str    # just the filename (e.g., 'part01.html')
     anchor: str       # just the anchor (e.g., 'chapter1'), empty if none
-    children: List['TOCEntry'] = field(default_factory=list)
+    children: list['TOCEntry'] = field(default_factory=list)
 
 
 @dataclass
@@ -45,21 +44,21 @@ class BookMetadata:
     """Metadata"""
     title: str
     language: str
-    authors: List[str] = field(default_factory=list)
-    description: Optional[str] = None
-    publisher: Optional[str] = None
-    date: Optional[str] = None
-    identifiers: List[str] = field(default_factory=list)
-    subjects: List[str] = field(default_factory=list)
+    authors: list[str] = field(default_factory=list)
+    description: str | None = None
+    publisher: str | None = None
+    date: str | None = None
+    identifiers: list[str] = field(default_factory=list)
+    subjects: list[str] = field(default_factory=list)
 
 
 @dataclass
 class Book:
     """The Master Object to be pickled."""
     metadata: BookMetadata
-    spine: List[ChapterContent]  # The actual content (linear files)
-    toc: List[TOCEntry]          # The navigation tree
-    images: Dict[str, str]       # Map: original_path -> local_path
+    spine: list[ChapterContent]  # The actual content (linear files)
+    toc: list[TOCEntry]          # The navigation tree
+    images: dict[str, str]       # Map: original_path -> local_path
 
     # Meta info
     source_file: str
@@ -93,7 +92,7 @@ def extract_plain_text(soup: BeautifulSoup) -> str:
     return ' '.join(text.split())
 
 
-def parse_toc_recursive(toc_list, depth=0) -> List[TOCEntry]:
+def parse_toc_recursive(toc_list, depth=0) -> list[TOCEntry]:
     """
     Recursively parses the TOC structure from ebooklib.
     """
@@ -105,13 +104,13 @@ def parse_toc_recursive(toc_list, depth=0) -> List[TOCEntry]:
             if isinstance(item, tuple):
                 section, children = item
                 child_entries = parse_toc_recursive(children, depth + 1)
-                
+
                 # Some magazines have sections without an href (just a label)
                 href = getattr(section, 'href', "") or ""
                 if not href and child_entries:
                     # Use the first child's href as a fallback for the parent container
                     href = child_entries[0].href
-                
+
                 entry = TOCEntry(
                     title=getattr(section, 'title', "Untitled Section"),
                     href=href,
@@ -154,7 +153,7 @@ def parse_toc_recursive(toc_list, depth=0) -> List[TOCEntry]:
     return result
 
 
-def get_fallback_toc(book_obj) -> List[TOCEntry]:
+def get_fallback_toc(book_obj) -> list[TOCEntry]:
     """
     If TOC is missing, build a flat one from all documents.
     """
@@ -269,15 +268,15 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
 
     # 6. Process Content (Collect all Document Items)
     print("Processing chapters...")
-    
+
     # Aggressive document collection: Any file ending in .html or .xhtml
     # This is more robust than relying on the EPUB's internal type metadata
     all_docs = {
-        item.get_name(): item 
-        for item in book.get_items() 
+        item.get_name(): item
+        for item in book.get_items()
         if item.get_name().lower().endswith(('.html', '.xhtml', '.htm'))
     }
-    
+
     spine_names = []
     for spine_item in book.spine:
         item_id = spine_item[0]
@@ -288,17 +287,17 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
     # Add any document that isn't in the spine
     all_names = list(all_docs.keys())
     # Sort them to keep some semblance of order for non-spine items
-    all_names.sort() 
-    
+    all_names.sort()
+
     final_names_ordered = []
     seen = set()
-    
+
     # 1. Spine first
     for name in spine_names:
         if name not in seen:
             final_names_ordered.append(name)
             seen.add(name)
-            
+
     # 2. Everything else
     for name in all_names:
         # Skip common non-content items if they aren't in spine
@@ -318,11 +317,11 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
             # Raw content
             content_bytes = item.get_content()
             raw_content = content_bytes.decode('utf-8', errors='ignore')
-            
+
             # Skip very short or empty documents (often placeholders)
             if len(raw_content) < 50 and i > 0: # keep first one if it's a cover
                 continue
-                
+
             soup = BeautifulSoup(raw_content, 'html.parser')
 
             # A. Fix Images
@@ -349,8 +348,8 @@ def process_epub(epub_path: str, output_dir: str) -> Book:
             # D. Create Object
             chapter = ChapterContent(
                 id=item_id,
-                href=name, 
-                title=f"Section {order_counter + 1}", 
+                href=name,
+                title=f"Section {order_counter + 1}",
                 content=final_html,
                 text=extract_plain_text(soup),
                 order=order_counter

@@ -1,30 +1,29 @@
 import os
 import pickle
-import tempfile
+import runpy
 import shutil
 import subprocess
 import sys
-import runpy
-from unittest.mock import patch, MagicMock
+import tempfile
+from unittest.mock import MagicMock
 
 import pytest
 from bs4 import BeautifulSoup
 from ebooklib import epub
 
 from reader3 import (
-    clean_html_content,
-    extract_plain_text,
-    parse_toc_recursive,
-    get_fallback_toc,
-    extract_metadata_robust,
-    process_epub,
-    save_to_pickle,
+    Book,
+    BookMetadata,
     ChapterContent,
     TOCEntry,
-    BookMetadata,
-    Book,
+    clean_html_content,
+    extract_metadata_robust,
+    extract_plain_text,
+    get_fallback_toc,
+    parse_toc_recursive,
+    process_epub,
+    save_to_pickle,
 )
-
 
 # --- Helper fixtures ---
 
@@ -276,7 +275,7 @@ class TestParseTocRecursive:
         assert len(result) == 2
 
     def test_tuple_with_bad_section(self):
-        link = epub.Link('ch1.xhtml', 'Ch1', 'ch1')
+        epub.Link('ch1.xhtml', 'Ch1', 'ch1')
         result = parse_toc_recursive([(42,)])
         assert result == []
 

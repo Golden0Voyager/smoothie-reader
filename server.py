@@ -1,27 +1,26 @@
-import os
-import json
-import hashlib
-import pickle
 import asyncio
+import hashlib
+import json
+import os
+import pickle
 import sqlite3
 import tempfile
 import zlib
 from functools import lru_cache
-from typing import Optional
 
-from fastapi import FastAPI, Request, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, Response
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 import edge_tts
 import httpx
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.templating import Jinja2Templates
 
 # AI Imports
 from google import genai as google_genai
-from dotenv import load_dotenv
+from pydantic import BaseModel
 
-from reader3 import Book, BookMetadata, ChapterContent, TOCEntry, process_epub, save_to_pickle
+from reader3 import Book, process_epub, save_to_pickle
 
 # Load .env file automatically
 load_dotenv()
@@ -69,9 +68,9 @@ def _load_ai_config():
     global _ai_config
     if os.path.exists(AI_CONFIG_PATH):
         try:
-            with open(AI_CONFIG_PATH, 'r') as f:
+            with open(AI_CONFIG_PATH) as f:
                 _ai_config = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
     _ai_config.setdefault('providers', {})
     _ai_config.setdefault('order', [])
@@ -442,7 +441,8 @@ def _cn_dict_lookup(word: str) -> dict | None:
 
 async def _wiki_summary(term: str) -> dict:
     """Fetch Wikipedia summary for a term. Auto-detect language."""
-    import urllib.request, urllib.parse
+    import urllib.parse
+    import urllib.request
     is_cjk = _detect_cjk_ratio(term) > 0.3
     lang = 'zh' if is_cjk else 'en'
     try:
@@ -463,6 +463,7 @@ async def _wiki_summary(term: str) -> dict:
 
 import re as _re
 
+
 def _safe_dirname(title: str, authors: list[str] = None) -> str:
     """Sanitize book title + author for use as directory name."""
     name = _re.sub(r'[\\/:*?"<>|]', '', title).strip()
@@ -478,8 +479,9 @@ def _safe_dirname(title: str, authors: list[str] = None) -> str:
 
 def _process_pdf(pdf_path: str, out_dir: str) -> dict:
     """Process a PDF file: extract metadata, render cover from first page, copy PDF."""
-    import fitz  # PyMuPDF
     import shutil
+
+    import fitz  # PyMuPDF
 
     os.makedirs(out_dir, exist_ok=True)
     images_dir = os.path.join(out_dir, "images")
@@ -544,7 +546,7 @@ def _get_text_hash(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
 
 @lru_cache(maxsize=20)
-def load_book_cached(folder_name: str) -> Optional[Book]:
+def load_book_cached(folder_name: str) -> Book | None:
     """Load a Book object from its pickle file, with LRU caching."""
     file_path = os.path.join(BOOKS_DIR, folder_name, "book.pkl")
     if not os.path.exists(file_path):
@@ -563,9 +565,9 @@ def _build_library_index():
     index = {}
     if os.path.exists(_LIBRARY_INDEX):
         try:
-            with open(_LIBRARY_INDEX, 'r') as f:
+            with open(_LIBRARY_INDEX) as f:
                 index = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             pass
     changed = False
     current_dirs = set()
@@ -584,7 +586,7 @@ def _build_library_index():
             if item in index and index[item].get('_mtime') == meta_mtime:
                 continue
             try:
-                with open(meta_json_path, 'r', encoding='utf-8') as f:
+                with open(meta_json_path, encoding='utf-8') as f:
                     pdf_meta = json.load(f)
                 old_display_title = index.get(item, {}).get('display_title')
                 index[item] = {
@@ -598,7 +600,7 @@ def _build_library_index():
                 if old_display_title:
                     index[item]['display_title'] = old_display_title
                 changed = True
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
         elif os.path.exists(pkl_path):
             # EPUB book
@@ -781,7 +783,7 @@ async def rename_book(book_id: str, request: Request):
     title = req.get("title", "").strip()
     index = {}
     if os.path.exists(_LIBRARY_INDEX):
-        with open(_LIBRARY_INDEX, 'r') as f:
+        with open(_LIBRARY_INDEX) as f:
             index = json.load(f)
     if book_id not in index:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -890,8 +892,8 @@ async def analyze_chapter(req: AIAnalyzeRequest):
         result["_model"] = used_model
         _analysis_cache[cache_key] = result # Cache the processed object
         return result
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: invalid JSON from AI")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Analysis failed: invalid JSON from AI")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
@@ -1549,7 +1551,7 @@ async def serve_apple_books_cover(asset_id: str):
     if not heics:
         raise HTTPException(status_code=404, detail="No cover image")
     # Convert HEIC to JPEG synchronously (awaited)
-    result = await asyncio.to_thread(
+    await asyncio.to_thread(
         subprocess.run,
         ["sips", "-s", "format", "jpeg", heics[0], "--out", jpeg_path],
         capture_output=True, timeout=10
@@ -1739,7 +1741,7 @@ async def read_pdf(request: Request, book_id: str):
     meta_path = os.path.join(BOOKS_DIR, safe_id, "meta.json")
     if not os.path.exists(meta_path):
         raise HTTPException(status_code=404, detail="PDF book not found")
-    with open(meta_path, 'r', encoding='utf-8') as f:
+    with open(meta_path, encoding='utf-8') as f:
         meta = json.load(f)
     # Check for display_title in library index
     index = _build_library_index()
@@ -1832,11 +1834,12 @@ async def search_cover_online(book_id: str, req: dict = None):
         authors = ', '.join(book.metadata.authors) if book.metadata.authors else ''
         query = f"{title} {authors}".strip()
     else:
-        with open(meta_path, 'r', encoding='utf-8') as f:
+        with open(meta_path, encoding='utf-8') as f:
             pdf_meta = json.load(f)
         query = f"{pdf_meta.get('title', '')} {pdf_meta.get('author', '')}".strip()
 
-    import urllib.parse, urllib.request
+    import urllib.parse
+    import urllib.request
 
     # Detect if query is likely Chinese
     has_cjk = any('\u4e00' <= ch <= '\u9fff' for ch in query)
@@ -1950,8 +1953,9 @@ async def set_cover_from_url(book_id: str, req: dict):
         img_data = await asyncio.to_thread(_download)
 
         # Auto-trim white borders
-        from PIL import Image, ImageChops
         import io
+
+        from PIL import Image, ImageChops
         def _trim_and_save():
             img = Image.open(io.BytesIO(img_data)).convert("RGB")
             # Create a white background image, diff to find content area
@@ -1992,18 +1996,18 @@ def auto_import_default_books():
     book_filename = os.path.basename(default_book)
     book_id = os.path.splitext(book_filename)[0].replace(" ", "_")
     book_data_path = os.path.join(BOOKS_DIR, book_id)
-    
+
     if not os.path.exists(book_data_path):
         print(f"📦 First run detected: Auto-importing '{book_filename}'...")
         try:
             # Silence internal prints during auto-import
-            import sys
             import io
+            import sys
             old_stdout = sys.stdout
             sys.stdout = io.StringIO()
-            
+
             process_epub(default_book, BOOKS_DIR)
-            
+
             sys.stdout = old_stdout
             print(f"✅ Successfully imported '{book_filename}'.")
         except Exception as e:
