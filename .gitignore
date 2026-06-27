@@ -57,3 +57,11 @@ books/
 # Skill-generated analysis artifacts
 .understand-anything/
 .codegraph/
+
+# Toolchain caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Coverage
+htmlcov/
